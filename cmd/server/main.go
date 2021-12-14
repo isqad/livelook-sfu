@@ -73,6 +73,7 @@ func main() {
 	staticPrefix := "/static/"
 	staticDir := path.Join(cwd, "web", staticPrefix)
 	r.Method("GET", staticPrefix+"*", http.StripPrefix(staticPrefix, http.FileServer(http.Dir(staticDir))))
+	r.Method("GET", "/favicon.ico", http.FileServer(http.Dir(staticDir)))
 
 	server := &http.Server{
 		Addr:              ":3001",
