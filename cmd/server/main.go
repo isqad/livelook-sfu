@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
+	"github.com/isqad/livelook-sfu/internal/sfu"
 	"github.com/isqad/melody"
 
 	"github.com/jmoiron/sqlx"
@@ -55,13 +58,51 @@ func main() {
 		tmpl.ExecuteTemplate(w, "layout.html", nil)
 	})
 
-	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Some client connected")
-		m.HandleRequest(w, r)
+	r.Post("/api/v1/broadcasts", func(w http.ResponseWriter, r *http.Request) {
+		req := &sfu.BroadcastRequest{}
+
+		err := json.NewDecoder(r.Body).Decode(req)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		log.Printf("%+v\n", req)
+
+		broadcast, err := sfu.NewBroadcast(
+			uuid.NewString(),
+			req.UserID,
+			req.Title,
+			req.Sdp,
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := broadcast.Start(db); err != nil {
+			log.Fatal(err)
+		}
+
+		w.WriteHeader(http.StatusOK)
 	})
 
-	m.HandleMessage(func(s *melody.Session, msg []byte) {
-		m.Broadcast(msg)
+	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+		uuid := r.URL.Query().Get("uuid")
+		if uuid == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// FIXME: create new user for every socket connection
+		u := sfu.NewUser(uuid)
+		u, err := u.Save(db)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		sessKeys := make(map[string]interface{})
+		sessKeys[uuid] = struct{}{}
+
+		m.HandleRequestWithKeys(w, r, sessKeys)
 	})
 
 	// Serve static assets

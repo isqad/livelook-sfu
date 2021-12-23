@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import './Room.css';
 
 const peerConnection = new RTCPeerConnection({
@@ -11,10 +12,10 @@ export default function Homepage() {
   const videoRef = useRef(null);
   const [streaming, setStreaming] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [userId, _] = useState(uuidv4());
 
   useEffect(() => {
-    const ws = new WebSocket('wss://localhost:3001/ws');
-
+    const ws = new WebSocket('wss://localhost:3001/ws?uuid=' + userId);
     ws.onopen = () => {
       _initPC()
       setConnected(true);
@@ -52,7 +53,21 @@ export default function Homepage() {
 
       peerConnection.createOffer().
         then((offer) => {
-          peerConnection.setLocalDescription(offer)
+          peerConnection.setLocalDescription(offer).then(() => {
+            fetch('https://localhost:3001/api/v1/broadcasts', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json;charset=utf-8'
+              },
+              body: JSON.stringify({
+                user_id: userId,
+                title: "Hello, pion!",
+                sdp: peerConnection.localDescription,
+              })
+            }).then(response => null).
+              catch(console.error);
+          }).catch(console.error);
+
         }).catch(console.error);
     };
     peerConnection.onicegatheringstatechange = (event) => {
