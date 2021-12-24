@@ -1,8 +1,10 @@
 package sfu
 
 import (
+	"context"
 	"log"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
 	"github.com/pion/webrtc/v3"
 )
@@ -43,7 +45,7 @@ func NewBroadcast(id string, userID string, title string, sdp webrtc.SessionDesc
 	return broadcast, nil
 }
 
-func (b *Broadcast) Start(db *sqlx.DB) error {
+func (b *Broadcast) Start(db *sqlx.DB, rdb *redis.Client) error {
 	err := b.PeerConnection.SetRemoteDescription(b.Sdp)
 	if err != nil {
 		return err
@@ -59,6 +61,15 @@ func (b *Broadcast) Start(db *sqlx.DB) error {
 	}
 	<-gatherComplete
 	log.Println("ICE candidates gathered!")
+
+	answerJSONRpc, err := NewSdpJSONRpc(answer, "answer")
+	if err != nil {
+		return err
+	}
+	// Send answer
+	if err := rdb.Publish(context.Background(), "messages:"+b.UserID, answerJSONRpc).Err(); err != nil {
+		return err
+	}
 
 	_, err = db.Exec(
 		`INSERT INTO broadcasts (id, user_id, title, created_at) VALUES ($1, $2, $3, NOW())`,

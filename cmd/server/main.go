@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,10 +17,17 @@ import (
 	"github.com/isqad/livelook-sfu/internal/sfu"
 	"github.com/isqad/melody"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
+
+// UserSub is user subscription
+type UserSub struct {
+	userID string
+	pubsub *redis.PubSub
+}
 
 func main() {
 	dataSrcName := "postgres://postgres:qwerty@localhost:15433/livelook"
@@ -30,11 +39,18 @@ func main() {
 		log.Fatal(err)
 	}
 
+	rdb := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		DB:   0,
+	})
+
 	m := melody.New()
 	m.Config.MaxMessageSize = 1024
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		tmpl, err := template.New("app").ParseFiles(
 			"web/templates/layout.html",
@@ -67,7 +83,6 @@ func main() {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		log.Printf("%+v\n", req)
 
 		broadcast, err := sfu.NewBroadcast(
 			uuid.NewString(),
@@ -78,7 +93,8 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err := broadcast.Start(db); err != nil {
+		// FIXME: init broadcast in background
+		if err := broadcast.Start(db, rdb); err != nil {
 			log.Fatal(err)
 		}
 
@@ -99,10 +115,45 @@ func main() {
 			log.Fatal(err)
 		}
 
+		ctx := context.Background()
+		// Subscribe user to messages
+		pubsub := rdb.Subscribe(ctx, "messages:"+uuid)
+		// Wait until subscription is created
+		_, err = pubsub.Receive(ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		userSub := &UserSub{userID: uuid, pubsub: pubsub}
+
 		sessKeys := make(map[string]interface{})
-		sessKeys[uuid] = struct{}{}
+		sessKeys["sub"] = userSub
 
 		m.HandleRequestWithKeys(w, r, sessKeys)
+	})
+	m.HandleConnect(func(s *melody.Session) {
+		subscription, err := getUserSub(s)
+		if err != nil {
+			log.Fatal(err)
+		}
+		go func() {
+			ch := subscription.pubsub.Channel()
+			for msg := range ch {
+				s.Write([]byte(msg.Payload))
+			}
+		}()
+	})
+	m.HandleDisconnect(func(s *melody.Session) {
+		subscription, err := getUserSub(s)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = subscription.pubsub.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println("User disconnected")
+		// TODO: stop user's broadcast
 	})
 
 	// Serve static assets
@@ -126,4 +177,16 @@ func main() {
 	if err := server.ListenAndServeTLS("configs/certs/cert.pem", "configs/certs/key.pem"); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Server has been closed immediatelly: %v\n", err)
 	}
+}
+
+func getUserSub(s *melody.Session) (*UserSub, error) {
+	userSub, ok := s.Keys["sub"]
+	if !ok {
+		return nil, fmt.Errorf("No sub for given session: %+v", s)
+	}
+	subscription, ok := userSub.(*UserSub)
+	if !ok {
+		return nil, fmt.Errorf("Cann't convert userSub: %+v", userSub)
+	}
+	return subscription, nil
 }

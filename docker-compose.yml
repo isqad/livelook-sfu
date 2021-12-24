@@ -61,6 +61,17 @@ services:
     depends_on:
       - db
 
+  redis:
+    image: redis:alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "2"
+
 volumes:
   pg-data:
     driver: local
