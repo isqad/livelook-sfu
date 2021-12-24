@@ -3,9 +3,11 @@ package sfu
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -31,7 +33,13 @@ func NewBroadcast(id string, userID string, title string, sdp webrtc.SessionDesc
 	if err != nil {
 		return nil, err
 	}
-	peerConnection.OnTrack(onTrack)
+
+	if _, err := peerConnection.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio); err != nil {
+		return nil, err
+	}
+	if _, err := peerConnection.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo); err != nil {
+		return nil, err
+	}
 
 	broadcast := &Broadcast{
 		ID:             id,
@@ -41,6 +49,7 @@ func NewBroadcast(id string, userID string, title string, sdp webrtc.SessionDesc
 		PeerConnection: peerConnection,
 		localTrackChan: make(chan *webrtc.TrackLocalStaticRTP),
 	}
+	peerConnection.OnTrack(broadcast.onTrack)
 
 	return broadcast, nil
 }
@@ -62,7 +71,7 @@ func (b *Broadcast) Start(db *sqlx.DB, rdb *redis.Client) error {
 	<-gatherComplete
 	log.Println("ICE candidates gathered!")
 
-	answerJSONRpc, err := NewSdpJSONRpc(answer, "answer")
+	answerJSONRpc, err := NewSdpJSONRpc(b.PeerConnection.LocalDescription(), "answer")
 	if err != nil {
 		return err
 	}
@@ -98,4 +107,35 @@ func (b *Broadcast) ClosePeerConnection() error {
 	return b.PeerConnection.Close()
 }
 
-func onTrack(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {}
+func (b *Broadcast) onTrack(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+	log.Println("ON TRACK!")
+	// Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
+	go func() {
+		ticker := time.NewTicker(time.Second * 3)
+		for range ticker.C {
+			errSend := b.PeerConnection.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remoteTrack.SSRC())}})
+			if errSend != nil {
+				log.Println(errSend)
+			}
+		}
+	}()
+
+	// Read incoming RTCP packets
+	go func() {
+		rtcpBuf := make([]byte, 1500)
+		for {
+			if _, _, rtcpErr := receiver.Read(rtcpBuf); rtcpErr != nil {
+				return
+			}
+		}
+	}()
+
+	rtpBuf := make([]byte, 1400)
+	for {
+		_, _, readErr := remoteTrack.Read(rtpBuf)
+		if readErr != nil {
+			log.Println(readErr)
+			return
+		}
+	}
+}

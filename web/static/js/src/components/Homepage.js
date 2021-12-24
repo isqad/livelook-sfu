@@ -29,7 +29,15 @@ export default function Homepage() {
     };
 
     ws.onmessage = (e) => {
-      console.log("Got message: ", e);
+      const message = JSON.parse(e.data);
+
+      switch (message.method) {
+        case "answer":
+          _setRemoteDescription(message.params);
+          break;
+        default:
+          console.error("Undefined rpc method: ", message.method);
+      }
     };
 
     return () => {
@@ -49,8 +57,6 @@ export default function Homepage() {
     };
 
     peerConnection.onnegotiationneeded = (event) => {
-      console.log('ONN');
-
       peerConnection.createOffer().
         then((offer) => {
           peerConnection.setLocalDescription(offer).then(() => {
@@ -82,9 +88,14 @@ export default function Homepage() {
     console.log(peerConnection);
   };
 
+  const _setRemoteDescription = (sdpString) => {
+    peerConnection.setRemoteDescription(new RTCSessionDescription(sdpString)).then(() => {
+      console.log('remote description set');
+    }).catch(console.error);
+  };
+
   const startStream = () => {
     navigator.mediaDevices.getUserMedia({video: true, audio: true}).then(stream => {
-
       const tracks = stream.getTracks();
       for (const track of tracks) {
         peerConnection.addTrack(track);
