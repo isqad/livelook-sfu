@@ -2,7 +2,10 @@ package sfu
 
 import (
 	"context"
+	"errors"
+	"io"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -24,8 +27,10 @@ type Broadcast struct {
 	Sdp            webrtc.SessionDescription `db:"-"`
 	PeerConnection *webrtc.PeerConnection    `db:"-"`
 
-	// all viewers will be fed via this channel (track)
-	localTrackChan chan *webrtc.TrackLocalStaticRTP
+	// all viewers will be fed via this tracks
+	localVideoTrack *webrtc.TrackLocalStaticRTP
+	localAudioTrack *webrtc.TrackLocalStaticRTP
+	mutex           sync.Mutex
 }
 
 func NewBroadcast(id string, userID string, title string, sdp webrtc.SessionDescription) (*Broadcast, error) {
@@ -47,7 +52,6 @@ func NewBroadcast(id string, userID string, title string, sdp webrtc.SessionDesc
 		Title:          title,
 		Sdp:            sdp,
 		PeerConnection: peerConnection,
-		localTrackChan: make(chan *webrtc.TrackLocalStaticRTP),
 	}
 	peerConnection.OnTrack(broadcast.onTrack)
 
@@ -69,6 +73,7 @@ func (b *Broadcast) Start(db *sqlx.DB, rdb *redis.Client) error {
 		return err
 	}
 	<-gatherComplete
+	// TODO: ICE Trickle
 	log.Println("ICE candidates gathered!")
 
 	answerJSONRpc, err := NewSdpJSONRpc(b.PeerConnection.LocalDescription(), "answer")
@@ -108,7 +113,8 @@ func (b *Broadcast) ClosePeerConnection() error {
 }
 
 func (b *Broadcast) onTrack(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-	log.Println("ON TRACK!")
+	log.Printf("ON TRACK! %+v", remoteTrack.Kind())
+
 	// Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
 	go func() {
 		ticker := time.NewTicker(time.Second * 3)
@@ -130,12 +136,60 @@ func (b *Broadcast) onTrack(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RT
 		}
 	}()
 
-	rtpBuf := make([]byte, 1400)
-	for {
-		_, _, readErr := remoteTrack.Read(rtpBuf)
-		if readErr != nil {
-			log.Println(readErr)
+	if remoteTrack.Kind() == webrtc.RTPCodecTypeVideo {
+		localVideoTrack, err := webrtc.NewTrackLocalStaticRTP(
+			remoteTrack.Codec().RTPCodecCapability,
+			remoteTrack.Kind().String(),
+			"pion",
+		)
+		if err != nil {
+			log.Println(err)
 			return
+		}
+		b.mutex.Lock()
+		b.localVideoTrack = localVideoTrack
+		b.mutex.Unlock()
+
+		rtpBuf := make([]byte, 1400)
+		for {
+			i, _, readErr := remoteTrack.Read(rtpBuf)
+			if readErr != nil {
+				log.Println(readErr)
+				return
+			}
+			// ErrClosedPipe means we don't have any subscribers, this is ok if no peers have connected yet
+			if _, err = b.localVideoTrack.Write(rtpBuf[:i]); err != nil && errors.Is(err, io.ErrClosedPipe) {
+				log.Println(err)
+				return
+			}
+		}
+	} else if remoteTrack.Kind() == webrtc.RTPCodecTypeAudio {
+		localAudioTrack, err := webrtc.NewTrackLocalStaticRTP(
+			remoteTrack.Codec().RTPCodecCapability,
+			remoteTrack.Kind().String(),
+			"pion",
+		)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		b.mutex.Lock()
+		b.localAudioTrack = localAudioTrack
+		b.mutex.Unlock()
+
+		rtpBuf := make([]byte, 1400)
+		for {
+			i, _, readErr := remoteTrack.Read(rtpBuf)
+			if readErr != nil {
+				log.Println(readErr)
+				return
+			}
+
+			// ErrClosedPipe means we don't have any subscribers, this is ok if no peers have connected yet
+			if _, err = b.localAudioTrack.Write(rtpBuf[:i]); err != nil && errors.Is(err, io.ErrClosedPipe) {
+				log.Println(err)
+				return
+			}
 		}
 	}
 }
