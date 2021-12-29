@@ -1,0 +1,38 @@
+{{define "content"}}
+<div class="container">
+  <div class="row">
+    <div class="col-sm">&nbsp;</div>
+    <div class="col-sm-8">
+      <h1>Welcome</h1>
+      <form action="/admin/login" method="post">
+        <div class="form-group row">
+          <label for="logEmail" class="col-sm-3 col-form-label">E-mail:</label>
+          <div class="col-sm-9">
+            <input id="logEmail" class="form-control" name="email" type="email" placeholder="E-mail" />
+            {{with .error}}<div class="invalid-feedback">{{.}}</div>{{end}}
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <label for="logPwd" class="col-sm-3 col-form-label">Password:</label>
+          <div class="col-sm-9">
+            <input id="logPwd" class="form-control" name="password" type="password" placeholder="Password" />
+          </div>
+        </div>
+
+        <div class="form-group row">
+          <div class="col-sm-12">
+            <button type="submit" class="btn btn-outline-primary form-primary-links">Login</button>
+          </div>
+        </div>
+
+        {{with .csrf_token}}<input type="hidden" name="csrf_token" value="{{.}}" />{{end}}
+      </form>
+    </div>
+    <div class="col-sm">&nbsp;</div>
+  </div>
+</div>
+{{end}}
+
+{{define "javascripts"}}
+{{end}}

@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/isqad/livelook-sfu/internal/admin"
 	"github.com/isqad/livelook-sfu/internal/sfu"
 	"github.com/isqad/melody"
 
@@ -51,24 +52,17 @@ func main() {
 	m.Config.MaxMessageSize = 1024
 
 	r := chi.NewRouter()
+	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
+	// Mount admin
+	r.Mount("/admin", admin.NewApp(db, "https://localhost:3001/admin").Router())
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		tmpl, err := template.New("app").ParseFiles(
 			"web/templates/layout.html",
 			"web/templates/index.html",
-		)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		tmpl.ExecuteTemplate(w, "layout.html", nil)
-	})
-	r.Get("/admin", func(w http.ResponseWriter, r *http.Request) {
-		tmpl, err := template.New("app").ParseFiles(
-			"web/templates/layout.html",
-			"web/templates/admin/index.html",
 		)
 		if err != nil {
 			log.Fatal(err)
