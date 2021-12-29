@@ -1,0 +1,14 @@
+{{define "content"}}
+<div id="app"></div>
+{{end}}
+
+{{define "javascripts"}}
+<script type="application/javascript">
+  var app = {
+      config: {
+          broadcastId: '{{.ID}}'
+      }
+  };
+</script>
+<script type="application/javascript" src="/static/js/dist/broadcastShow.bundle.js"></script>
+{{end}}

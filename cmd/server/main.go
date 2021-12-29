@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"text/template"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/google/uuid"
 	"github.com/isqad/livelook-sfu/internal/sfu"
 	"github.com/isqad/melody"
 
@@ -44,6 +44,9 @@ func main() {
 		DB:   0,
 	})
 
+	broadcastsRepo := sfu.NewBroadcastsRepository(db)
+	sup := sfu.NewBroadcastsSupervisor(db, rdb)
+
 	m := melody.New()
 	m.Config.MaxMessageSize = 1024
 
@@ -65,13 +68,72 @@ func main() {
 	r.Get("/admin", func(w http.ResponseWriter, r *http.Request) {
 		tmpl, err := template.New("app").ParseFiles(
 			"web/templates/layout.html",
-			"web/templates/admin.html",
+			"web/templates/admin/index.html",
 		)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		tmpl.ExecuteTemplate(w, "layout.html", nil)
+	})
+
+	r.Get("/broadcasts", func(w http.ResponseWriter, r *http.Request) {
+		tmpl, err := template.New("app").ParseFiles(
+			"web/templates/layout.html",
+			"web/templates/broadcasts/index.html",
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		tmpl.ExecuteTemplate(w, "layout.html", nil)
+	})
+
+	r.Get("/broadcasts/{id}", func(w http.ResponseWriter, r *http.Request) {
+		broadcastID := chi.URLParam(r, "id")
+
+		tmpl, err := template.New("app").ParseFiles(
+			"web/templates/layout.html",
+			"web/templates/broadcasts/show.html",
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		tmpl.ExecuteTemplate(w, "layout.html", struct{ ID string }{broadcastID})
+	})
+
+	r.Get("/api/v1/broadcasts", func(w http.ResponseWriter, r *http.Request) {
+		var (
+			page    int
+			perPage int
+		)
+
+		if pageParam := r.URL.Query().Get("p"); pageParam != "" {
+			page, err = strconv.Atoi(pageParam)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		if perPageParam := r.URL.Query().Get("limit"); perPageParam != "" {
+			page, err = strconv.Atoi(perPageParam)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		broadcasts, err := broadcastsRepo.GetAll(page, perPage)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		resp, err := json.Marshal(broadcasts)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if _, err := w.Write(resp); err != nil {
+			log.Fatal(err)
+		}
 	})
 
 	r.Post("/api/v1/broadcasts", func(w http.ResponseWriter, r *http.Request) {
@@ -84,17 +146,25 @@ func main() {
 			return
 		}
 
-		broadcast, err := sfu.NewBroadcast(
-			uuid.NewString(),
-			req.UserID,
-			req.Title,
-			req.Sdp,
-		)
-		if err != nil {
+		if err := sup.CreateBroadcast(req); err != nil {
 			log.Fatal(err)
 		}
-		// FIXME: init broadcast in background
-		if err := broadcast.Start(db, rdb); err != nil {
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	r.Post("/api/v1/broadcasts/{id}/viewers", func(w http.ResponseWriter, r *http.Request) {
+		broadcastID := chi.URLParam(r, "id")
+		req := &sfu.ViewerRequest{}
+
+		err := json.NewDecoder(r.Body).Decode(req)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if err := sup.AddViewer(broadcastID, req); err != nil {
 			log.Fatal(err)
 		}
 

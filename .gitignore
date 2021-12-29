@@ -1,10 +1,10 @@
 log/*
 cmd/bin/*
 *.sql.gz
-*.sql
 *.csv
 *.xls
 *.xlsx
 *.bak
 !.gitkeep
 web/static/js/node_modules/
+web/static/js/dist/
