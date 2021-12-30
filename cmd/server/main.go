@@ -46,7 +46,8 @@ func main() {
 	})
 
 	broadcastsRepo := sfu.NewBroadcastsRepository(db)
-	sup := sfu.NewBroadcastsSupervisor(db, rdb)
+	eventBus := sfu.NewEventBus(rdb)
+	sup := sfu.NewBroadcastsSupervisor(broadcastsRepo, eventBus)
 
 	m := melody.New()
 	m.Config.MaxMessageSize = 1024

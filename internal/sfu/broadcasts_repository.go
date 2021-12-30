@@ -9,6 +9,11 @@ const (
 	perPageDefault int = 50
 )
 
+type BroadcastsDBStorer interface {
+	Save(*Broadcast) error
+	SetStopped(*Broadcast) error
+}
+
 type BroadcastsRepository struct {
 	db *sqlx.DB
 }
@@ -37,4 +42,30 @@ func (r *BroadcastsRepository) GetAll(page int, perPage int) ([]*Broadcast, erro
 	}
 
 	return bs, nil
+}
+
+func (r *BroadcastsRepository) Save(broadcast *Broadcast) error {
+	_, err := r.db.Exec(
+		`INSERT INTO broadcasts (id, user_id, title, created_at) VALUES ($1, $2, $3, NOW())`,
+		broadcast.ID,
+		broadcast.UserID,
+		broadcast.Title,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *BroadcastsRepository) SetStopped(broadcast *Broadcast) error {
+	_, err := r.db.Exec(
+		`UPDATE broadcasts SET "state" = 'stopped' WHERE id = $1`,
+		broadcast.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

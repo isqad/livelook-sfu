@@ -4,23 +4,21 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 )
 
 type BroadcastsSupervisor struct {
-	Broadcasts map[string]*Broadcast
-	mutex      sync.RWMutex
-	db         *sqlx.DB
-	rdb        *redis.Client
+	Broadcasts          map[string]*Broadcast
+	mutex               sync.RWMutex
+	broadcastRepository BroadcastsDBStorer
+	publisher           EventBusPublisher
 }
 
-func NewBroadcastsSupervisor(db *sqlx.DB, rdb *redis.Client) *BroadcastsSupervisor {
+func NewBroadcastsSupervisor(broadcastRepository BroadcastsDBStorer, publisher EventBusPublisher) *BroadcastsSupervisor {
 	return &BroadcastsSupervisor{
-		Broadcasts: make(map[string]*Broadcast),
-		db:         db,
-		rdb:        rdb,
+		Broadcasts:          make(map[string]*Broadcast),
+		broadcastRepository: broadcastRepository,
+		publisher:           publisher,
 	}
 }
 
@@ -35,7 +33,7 @@ func (s *BroadcastsSupervisor) CreateBroadcast(req *BroadcastRequest) error {
 		return err
 	}
 	// FIXME: init broadcast in background
-	if err := broadcast.Start(s.db, s.rdb); err != nil {
+	if err := broadcast.Start(s.broadcastRepository, s.publisher); err != nil {
 		return err
 	}
 
@@ -64,7 +62,7 @@ func (s *BroadcastsSupervisor) AddViewer(broadcastID string, req *ViewerRequest)
 		return err
 	}
 
-	if err := viewer.Start(s.rdb); err != nil {
+	if err := viewer.Start(s.publisher); err != nil {
 		return err
 	}
 

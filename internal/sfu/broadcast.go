@@ -1,15 +1,12 @@
 package sfu
 
 import (
-	"context"
 	"errors"
 	"io"
 	"log"
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v8"
-	"github.com/jmoiron/sqlx"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
@@ -24,9 +21,9 @@ type BroadcastState string
 
 const (
 	BroadcastInitialState BroadcastState = "initial"
-	BroadcastRunningState                = "running"
-	BroadcastStoppedState                = "stopped"
-	BroadcastErroredState                = "errored"
+	BroadcastRunningState BroadcastState = "running"
+	BroadcastStoppedState BroadcastState = "stopped"
+	BroadcastErroredState BroadcastState = "errored"
 )
 
 type Broadcast struct {
@@ -67,6 +64,7 @@ func NewBroadcast(id string, userID string, title string, sdp webrtc.SessionDesc
 		UserID:         userID,
 		Title:          title,
 		PeerConnection: peerConnection,
+		State:          BroadcastInitialState,
 		viewers:        make(map[string]*Viewer),
 	}
 	peerConnection.OnTrack(broadcast.onTrack)
@@ -74,7 +72,7 @@ func NewBroadcast(id string, userID string, title string, sdp webrtc.SessionDesc
 	return broadcast, nil
 }
 
-func (b *Broadcast) Start(db *sqlx.DB, rdb *redis.Client) error {
+func (b *Broadcast) Start(broadcastRepository BroadcastsDBStorer, publisher EventBusPublisher) error {
 	answer, err := b.PeerConnection.CreateAnswer(nil)
 	if err != nil {
 		return err
@@ -93,26 +91,17 @@ func (b *Broadcast) Start(db *sqlx.DB, rdb *redis.Client) error {
 		return err
 	}
 	// Send answer
-	if err := rdb.Publish(context.Background(), "messages:"+b.UserID, answerJSONRpc).Err(); err != nil {
+	if err := publisher.Publish("messages:"+b.UserID, answerJSONRpc); err != nil {
 		return err
 	}
 
-	_, err = db.Exec(
-		`INSERT INTO broadcasts (id, user_id, title, created_at) VALUES ($1, $2, $3, NOW())`,
-		b.ID, b.UserID, b.Title,
-	)
-	if err != nil {
-		return err
-	}
+	b.State = BroadcastRunningState
 
-	return nil
+	return broadcastRepository.Save(b)
 }
 
-func (b *Broadcast) Stop(db *sqlx.DB) error {
-	_, err := db.Exec(
-		`DELETE FROM broadcasts WHERE id = $1`,
-		b.ID,
-	)
+func (b *Broadcast) Stop(broadcastRepository BroadcastsDBStorer) error {
+	err := broadcastRepository.SetStopped(b)
 	if err != nil {
 		return err
 	}

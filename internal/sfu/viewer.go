@@ -1,10 +1,8 @@
 package sfu
 
 import (
-	"context"
 	"log"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -38,7 +36,7 @@ func NewViewer(id string, userID string, sdp webrtc.SessionDescription) (*Viewer
 	return viewer, nil
 }
 
-func (v *Viewer) Start(rdb *redis.Client) error {
+func (v *Viewer) Start(publisher EventBusPublisher) error {
 	answer, err := v.PeerConnection.CreateAnswer(nil)
 	if err != nil {
 		return err
@@ -58,8 +56,7 @@ func (v *Viewer) Start(rdb *redis.Client) error {
 	}
 
 	// Send answer
-	// TODO: incapsulate
-	if err := rdb.Publish(context.Background(), "messages:"+v.UserID, answerJSONRpc).Err(); err != nil {
+	if err := publisher.Publish("messages:"+v.UserID, answerJSONRpc); err != nil {
 		return err
 	}
 	return nil
