@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/sessions"
+	"github.com/isqad/livelook-sfu/internal/sfu"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -53,6 +54,40 @@ func (app *App) Router() http.Handler {
 		tmpl.ExecuteTemplate(w, "layout.html", nil)
 	})
 	app.router.Post("/login", func(w http.ResponseWriter, r *http.Request) {
+		email := r.FormValue("email")
+		password := r.FormValue("password")
+
+		user, err := sfu.AuthUser(app.db, email, password)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if user == nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			tmpl, err := template.New("app").ParseFiles(
+				"web/templates/admin/layout.html",
+				"web/templates/admin/login/index.html",
+			)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			tmpl.ExecuteTemplate(w, "layout.html", nil)
+			return
+		}
+
+		session, _ := app.sessionStore.Get(r, sessionNameKey)
+		session.Values["id"] = user.ID
+		if err := session.Save(r, w); err != nil {
+			log.Fatal(err)
+		}
+
+		// Successfull, redirect to home page
+		w.Header().Set("Location", app.rootURL)
+		w.WriteHeader(http.StatusFound)
+	})
+	app.router.Delete("/login", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", app.rootURL+"/login")
+		w.WriteHeader(http.StatusFound)
 	})
 
 	app.router.With(app.authenticateOrLogin).Route("/", func(r chi.Router) {
