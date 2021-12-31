@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 org=localhost
-domain=localhost:8083
+domain=localhost:3001
 
 sudo trust anchor --remove configs/certs/ca.crt || true
 
