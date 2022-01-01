@@ -11,7 +11,7 @@ require (
 	github.com/jackc/pgx/v4 v4.14.1
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/pion/rtcp v1.2.9
-	github.com/pion/webrtc/v3 v3.1.12
+	github.com/pion/webrtc/v3 v3.1.13
 	github.com/stretchr/testify v1.7.0
 )
 
