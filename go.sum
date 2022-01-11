@@ -180,6 +180,8 @@ github.com/pion/webrtc/v3 v3.1.12 h1:IQNWhUMQzxDXy5ok9EjRkrH7PnTz+ZErrFCiABqBcCY
 github.com/pion/webrtc/v3 v3.1.12/go.mod h1:RACpyE1EDYlzonfbdPvXkIGDaqD8+NsHqZJN0yEbRbA=
 github.com/pion/webrtc/v3 v3.1.13 h1:2XxgGstOqt03ba8QD5+m9S8DCA3Ez53mULT4If8onOg=
 github.com/pion/webrtc/v3 v3.1.13/go.mod h1:RACpyE1EDYlzonfbdPvXkIGDaqD8+NsHqZJN0yEbRbA=
+github.com/pion/webrtc/v3 v3.1.14 h1:Ud8F3T3OyywXq0JoLIbJLHmfkk9JciawUWHGYgzuG2U=
+github.com/pion/webrtc/v3 v3.1.14/go.mod h1:Vn1lK5z9AEmabct0TirkWdt67kpzd40KrpkxPIvQfgE=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
@@ -248,6 +250,8 @@ golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2/go.mod h1:9nx3DQGgdP8bBQD5qx
 golang.org/x/net v0.0.0-20211201190559-0a0e4e1bb54c/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
 golang.org/x/net v0.0.0-20211215060638-4ddde0e984e9 h1:kmreh1vGI63l2FxOAYS3Yv6ATsi7lSTuwNSVbGfJV9I=
 golang.org/x/net v0.0.0-20211215060638-4ddde0e984e9/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
+golang.org/x/net v0.0.0-20211216030914-fe4d6282115f h1:hEYJvxw1lSnWIl8X9ofsYMklzaDs90JI2az5YMd4fPM=
+golang.org/x/net v0.0.0-20211216030914-fe4d6282115f/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
 golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
