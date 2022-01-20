@@ -149,6 +149,8 @@ github.com/pion/ice/v2 v2.1.18 h1:mDzd+iPKJmU30p4Kb+RPjK9olORLqJmQdiTUnVba50g=
 github.com/pion/ice/v2 v2.1.18/go.mod h1:9jDr0iIUg8P6+0Jq8QJ/eFSkX3JnsPd293TjCdkfpTs=
 github.com/pion/interceptor v0.1.4 h1:qL2xrdR6taLkVxEQj39btwEPRO3i9yd/olEw6+20dag=
 github.com/pion/interceptor v0.1.4/go.mod h1:Lh3JSl/cbJ2wP8I3ccrjh1K/deRGRn3UlSPuOTiHb6U=
+github.com/pion/interceptor v0.1.6 h1:ZTXN9fApUDmFqifG64g+ar57XY7vlnXUs7/0DjHVtLo=
+github.com/pion/interceptor v0.1.6/go.mod h1:Lh3JSl/cbJ2wP8I3ccrjh1K/deRGRn3UlSPuOTiHb6U=
 github.com/pion/logging v0.2.2 h1:M9+AIj/+pxNsDfAT64+MAVgJO0rsyLnoJKCqf//DoeY=
 github.com/pion/logging v0.2.2/go.mod h1:k0/tDVsRCX2Mb2ZEmTqNa7CWsQPc+YYCB7Q+5pahoms=
 github.com/pion/mdns v0.0.5 h1:Q2oj/JB3NqfzY9xGZ1fPzZzK7sDSD8rZPOvcIQ10BCw=
@@ -186,6 +188,8 @@ github.com/pion/webrtc/v3 v3.1.14 h1:Ud8F3T3OyywXq0JoLIbJLHmfkk9JciawUWHGYgzuG2U
 github.com/pion/webrtc/v3 v3.1.14/go.mod h1:Vn1lK5z9AEmabct0TirkWdt67kpzd40KrpkxPIvQfgE=
 github.com/pion/webrtc/v3 v3.1.15 h1:JUNR95xdhcRliAaUQjnuttFPdxGxW/ixcwnHRjQFWOU=
 github.com/pion/webrtc/v3 v3.1.15/go.mod h1:2brQHPJl93QVgbcVElY5syrrEzx5PXCxjrQ5g7Hwky8=
+github.com/pion/webrtc/v3 v3.1.17 h1:6V4Yf5wnvJZKs86401EcpsKmB5Px5pfF1ICXdPIRsC0=
+github.com/pion/webrtc/v3 v3.1.17/go.mod h1:kHunUx6HPCbCvGy/HdWQNwtT9LJ2XMS/sBmLwB1A4rs=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
