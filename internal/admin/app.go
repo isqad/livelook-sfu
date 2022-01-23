@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/sessions"
-	"github.com/isqad/livelook-sfu/internal/sfu"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -57,7 +56,7 @@ func (app *App) Router() http.Handler {
 		email := r.FormValue("email")
 		password := r.FormValue("password")
 
-		user, err := sfu.AuthUser(app.db, email, password)
+		user, err := AuthAdminUser(app.db, email, password)
 		if err != nil {
 			log.Fatal(err)
 		}

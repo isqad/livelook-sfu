@@ -109,29 +109,23 @@ func main() {
 	})
 
 	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
-		uuid := r.URL.Query().Get("uuid")
-		if uuid == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
 		// FIXME: create new user for every socket connection
-		u := sfu.NewUser(uuid)
-		u, err := u.Save(db)
+		u := sfu.NewUser()
+		err := u.Save(db)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		ctx := context.Background()
 		// Subscribe user to messages
-		pubsub := rdb.Subscribe(ctx, "messages:"+uuid)
+		pubsub := rdb.Subscribe(ctx, "messages:"+u.ID)
 		// Wait until subscription is created
 		_, err = pubsub.Receive(ctx)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		userSub := &UserSub{userID: uuid, pubsub: pubsub}
+		userSub := &UserSub{userID: u.ID, pubsub: pubsub}
 
 		sessKeys := make(map[string]interface{})
 		sessKeys["sub"] = userSub

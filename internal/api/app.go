@@ -71,6 +71,27 @@ func (app *App) Router() http.Handler {
 	})
 
 	app.router.With(FirebaseAuthenticator("127.0.0.1:50053", app.authFailedFunc)).Route("/", func(r chi.Router) {
+		r.Post("/users", func(w http.ResponseWriter, r *http.Request) {
+			user := sfu.NewUser()
+			err := json.NewDecoder(r.Body).Decode(user)
+			if err != nil {
+				log.Println(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if err := user.Save(app.DB); err != nil {
+				log.Println(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			if err := json.NewEncoder(w).Encode(user); err != nil {
+				log.Println(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		})
+
 		r.Post("/broadcasts", func(w http.ResponseWriter, r *http.Request) {
 			req := &sfu.BroadcastRequest{}
 

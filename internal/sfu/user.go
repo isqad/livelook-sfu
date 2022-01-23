@@ -1,50 +1,39 @@
 package sfu
 
 import (
-	"database/sql"
-
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
 // User is central subject of the application
 type User struct {
-	ID       string `json:"id" db:"id"`
-	Email    string `json:"email" db:"email"`
-	Password string `json:"-" db:"password"`
-	Name     string `json:"name" db:"name"`
+	ID   string `json:"id,omitempty" db:"id"`
+	UID  string `json:"uid" db:"uid"`
+	Name string `json:"name" db:"name"`
 }
 
 // NewUser creates new user subject
-func NewUser(id string) *User {
-	return &User{ID: id}
-}
-
-// AuthUser authenticate user
-// TODO: move to repository
-func AuthUser(db *sqlx.DB, email string, password string) (*User, error) {
-	u := &User{}
-	err := db.Get(u, `SELECT
-	id, email, name
-	FROM users
-	WHERE password = crypt($1, password) AND lower(email) = lower($2) LIMIT 1`,
-		password, email,
-	)
-	if err != nil {
-		if err != sql.ErrNoRows {
-			return nil, err
-		}
-		return nil, nil
-	}
-
-	return u, nil
+func NewUser() *User {
+	return &User{}
 }
 
 // Save saves the user to DB
-func (u *User) Save(db *sqlx.DB) (*User, error) {
-	_, err := db.Exec(`INSERT INTO users (id, created_at) VALUES ($1, NOW())`, u.ID)
+func (u *User) Save(db *sqlx.DB) error {
+	var id string
+	err := db.Get(&id,
+		`INSERT INTO users (id, uid, name, created_at) VALUES ($1, $2, $3, NOW())
+		  ON CONFLICT ON CONSTRAINT uniq_users_uid DO UPDATE
+		  SET
+			name = EXCLUDED.name
+		  RETURNING id`,
+		uuid.New().String(),
+		u.UID,
+		u.Name,
+	)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	u.ID = id
 
-	return u, nil
+	return nil
 }
