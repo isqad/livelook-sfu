@@ -2,19 +2,18 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path"
-	"strconv"
 	"text/template"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/isqad/livelook-sfu/internal/admin"
+	"github.com/isqad/livelook-sfu/internal/api"
 	"github.com/isqad/livelook-sfu/internal/sfu"
 	"github.com/isqad/melody"
 
@@ -59,6 +58,17 @@ func main() {
 
 	// Mount admin
 	r.Mount("/admin", admin.NewApp(db, "https://localhost:3001/admin").Router())
+	// Mount API
+	r.Mount(
+		"/api/v1",
+		api.NewApp(
+			api.AppOptions{
+				DB:                   db,
+				BroadcastsRepository: broadcastsRepo,
+				BroadcastsSupervisor: sup,
+			},
+		).Router(),
+	)
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		tmpl, err := template.New("app").ParseFiles(
@@ -96,74 +106,6 @@ func main() {
 		}
 
 		tmpl.ExecuteTemplate(w, "layout.html", struct{ ID string }{broadcastID})
-	})
-
-	r.Get("/api/v1/broadcasts", func(w http.ResponseWriter, r *http.Request) {
-		var (
-			page    int
-			perPage int
-		)
-
-		if pageParam := r.URL.Query().Get("p"); pageParam != "" {
-			page, err = strconv.Atoi(pageParam)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-		if perPageParam := r.URL.Query().Get("limit"); perPageParam != "" {
-			page, err = strconv.Atoi(perPageParam)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-		broadcasts, err := broadcastsRepo.GetAll(page, perPage)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		resp, err := json.Marshal(broadcasts)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if _, err := w.Write(resp); err != nil {
-			log.Fatal(err)
-		}
-	})
-
-	r.Post("/api/v1/broadcasts", func(w http.ResponseWriter, r *http.Request) {
-		req := &sfu.BroadcastRequest{}
-
-		err := json.NewDecoder(r.Body).Decode(req)
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		if err := sup.CreateBroadcast(req); err != nil {
-			log.Fatal(err)
-		}
-
-		w.WriteHeader(http.StatusOK)
-	})
-
-	r.Post("/api/v1/broadcasts/{id}/viewers", func(w http.ResponseWriter, r *http.Request) {
-		broadcastID := chi.URLParam(r, "id")
-		req := &sfu.ViewerRequest{}
-
-		err := json.NewDecoder(r.Body).Decode(req)
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		if err := sup.AddViewer(broadcastID, req); err != nil {
-			log.Fatal(err)
-		}
-
-		w.WriteHeader(http.StatusOK)
 	})
 
 	r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
