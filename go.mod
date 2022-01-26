@@ -14,7 +14,7 @@ require (
 	github.com/pion/rtcp v1.2.9
 	github.com/pion/webrtc/v3 v3.1.17
 	github.com/stretchr/testify v1.7.0
-	google.golang.org/grpc v1.43.0
+	google.golang.org/grpc v1.44.0
 )
 
 require (
