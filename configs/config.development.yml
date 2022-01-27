@@ -1,0 +1,11 @@
+db:
+  name: livelook
+  host: localhost
+  port: 15433
+  user: postgres
+  password: qwerty
+
+redis:
+  host: localhost
+  port: 6379
+

@@ -14,7 +14,7 @@ type User struct {
 
 // NewUser creates new user subject
 func NewUser() *User {
-	return &User{}
+	return &User{ID: uuid.New().String()}
 }
 
 // Save saves the user to DB
@@ -26,7 +26,7 @@ func (u *User) Save(db *sqlx.DB) error {
 		  SET
 			name = EXCLUDED.name
 		  RETURNING id`,
-		uuid.New().String(),
+		u.ID,
 		u.UID,
 		u.Name,
 	)

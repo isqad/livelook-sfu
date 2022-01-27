@@ -10,6 +10,9 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v2/altsrc"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/isqad/livelook-sfu/internal/admin"
@@ -30,6 +33,21 @@ type UserSub struct {
 }
 
 func main() {
+	flags := []cli.Flag{
+		altsrc.NewStringFlag(&cli.StringFlag{Name: "db.host", Required: true}),
+		altsrc.NewStringFlag(&cli.StringFlag{Name: "db.port", Required: true}),
+		altsrc.NewStringFlag(&cli.StringFlag{Name: "db.name", Required: true}),
+		altsrc.NewStringFlag(&cli.StringFlag{Name: "db.user", Required: true}),
+		altsrc.NewStringFlag(&cli.StringFlag{Name: "db.password", Required: true}),
+		&cli.StringFlag{Name: "config"},
+	}
+
+	_ = &cli.Command{
+		Name:   "sfu",
+		Flags:  flags,
+		Before: altsrc.InitInputSourceWithContext(flags, altsrc.NewYamlSourceFromFlagFunc("config")),
+	}
+
 	dataSrcName := "postgres://postgres:qwerty@localhost:15433/livelook"
 	db, err := sqlx.Connect("pgx", dataSrcName)
 	if err != nil {
