@@ -5,16 +5,17 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/isqad/livelook-sfu/internal/eventbus"
 )
 
 type BroadcastsSupervisor struct {
 	Broadcasts          map[string]*Broadcast
 	mutex               sync.RWMutex
 	broadcastRepository BroadcastsDBStorer
-	publisher           EventBusPublisher
+	publisher           eventbus.Publisher
 }
 
-func NewBroadcastsSupervisor(broadcastRepository BroadcastsDBStorer, publisher EventBusPublisher) *BroadcastsSupervisor {
+func NewBroadcastsSupervisor(broadcastRepository BroadcastsDBStorer, publisher eventbus.Publisher) *BroadcastsSupervisor {
 	return &BroadcastsSupervisor{
 		Broadcasts:          make(map[string]*Broadcast),
 		broadcastRepository: broadcastRepository,

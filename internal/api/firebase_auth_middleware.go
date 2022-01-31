@@ -28,7 +28,7 @@ func FirebaseAuthenticator(firebaseAuthServiceAddr string, authFailFunc AuthFail
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := r.Header.Get(xAuth)
 			if token == "" {
-				authFailFunc(w, r, errors.New("Emtpy token"))
+				authFailFunc(w, r, errors.New("emtpy token"))
 				return
 			}
 
@@ -52,7 +52,7 @@ func FirebaseAuthenticator(firebaseAuthServiceAddr string, authFailFunc AuthFail
 				return
 			}
 
-			ctx = context.WithValue(r.Context(), UserIDContextKey, t.UserId)
+			ctx = context.WithValue(r.Context(), UserIDContextKey, t.GetUserId())
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/isqad/livelook-sfu/internal/eventbus"
+
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
@@ -72,7 +74,7 @@ func NewBroadcast(id string, userID string, title string, sdp webrtc.SessionDesc
 	return broadcast, nil
 }
 
-func (b *Broadcast) Start(broadcastRepository BroadcastsDBStorer, publisher EventBusPublisher) error {
+func (b *Broadcast) Start(broadcastRepository BroadcastsDBStorer, publisher eventbus.Publisher) error {
 	answer, err := b.PeerConnection.CreateAnswer(nil)
 	if err != nil {
 		return err

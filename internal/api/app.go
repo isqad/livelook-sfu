@@ -2,21 +2,27 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/livelook-sfu/internal/sfu"
+	"github.com/isqad/melody"
 	"github.com/jmoiron/sqlx"
 )
 
 // AppOptions is options of the application
 type AppOptions struct {
 	DB                   *sqlx.DB
-	router               *chi.Mux
 	BroadcastsRepository *sfu.BroadcastsRepository
 	BroadcastsSupervisor *sfu.BroadcastsSupervisor
+	EventBus             *eventbus.Eventbus
+
+	router    *chi.Mux
+	websocket *melody.Melody
 }
 
 // App is application for API
@@ -27,6 +33,8 @@ type App struct {
 // NewApp creates a new API application
 func NewApp(options AppOptions) *App {
 	options.router = chi.NewRouter()
+	options.websocket = melody.New()
+	options.websocket.Config.MaxMessageSize = 1024
 
 	app := &App{
 		options,
@@ -70,7 +78,26 @@ func (app *App) Router() http.Handler {
 		}
 	})
 
-	app.router.With(FirebaseAuthenticator("127.0.0.1:50053", app.authFailedFunc)).Route("/", func(r chi.Router) {
+	app.router.With(
+		FirebaseAuthenticator("127.0.0.1:50053", app.authFailedFunc),
+	).Route("/", func(r chi.Router) {
+		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+			userID, ok := r.Context().Value(UserIDContextKey).(string)
+			if !ok {
+				log.Fatal("can't get user ID from request context")
+			}
+
+			userSub, err := app.EventBus.SubscribeUser(userID) // TODO
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			sessKeys := make(map[string]interface{})
+			sessKeys["sub"] = userSub
+
+			app.websocket.HandleRequestWithKeys(w, r, sessKeys)
+		})
+
 		r.Post("/users", func(w http.ResponseWriter, r *http.Request) {
 			user := sfu.NewUser()
 			err := json.NewDecoder(r.Body).Decode(user)
@@ -128,9 +155,46 @@ func (app *App) Router() http.Handler {
 		})
 	})
 
+	app.websocket.HandleConnect(func(s *melody.Session) {
+		subscription, err := getUserSub(s)
+		if err != nil {
+			log.Fatal(err)
+		}
+		go func() {
+			ch := subscription.Channel()
+			for msg := range ch {
+				s.Write([]byte(msg.Payload))
+			}
+		}()
+	})
+	app.websocket.HandleDisconnect(func(s *melody.Session) {
+		subscription, err := getUserSub(s)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = subscription.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println("User disconnected")
+		// TODO: stop user's broadcast
+	})
+
 	return app.router
 }
 
 func (app *App) authFailedFunc(w http.ResponseWriter, r *http.Request, err error) {
 	w.WriteHeader(http.StatusUnauthorized)
+}
+
+func getUserSub(s *melody.Session) (*eventbus.UserSubscription, error) {
+	userSub, ok := s.Keys["sub"]
+	if !ok {
+		return nil, fmt.Errorf("No sub for given session: %+v", s)
+	}
+	subscription, ok := userSub.(*eventbus.UserSubscription)
+	if !ok {
+		return nil, fmt.Errorf("Cann't convert userSub: %+v", userSub)
+	}
+	return subscription, nil
 }

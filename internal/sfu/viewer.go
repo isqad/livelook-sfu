@@ -3,6 +3,8 @@ package sfu
 import (
 	"log"
 
+	"github.com/isqad/livelook-sfu/internal/eventbus"
+
 	"github.com/pion/webrtc/v3"
 )
 
@@ -36,7 +38,7 @@ func NewViewer(id string, userID string, sdp webrtc.SessionDescription) (*Viewer
 	return viewer, nil
 }
 
-func (v *Viewer) Start(publisher EventBusPublisher) error {
+func (v *Viewer) Start(publisher eventbus.Publisher) error {
 	answer, err := v.PeerConnection.CreateAnswer(nil)
 	if err != nil {
 		return err
