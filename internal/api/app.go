@@ -14,6 +14,12 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+type ChatRpc struct {
+	JSONRPC string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  string `json:"params"`
+}
+
 // AppOptions is options of the application
 type AppOptions struct {
 	DB                   *sqlx.DB
@@ -160,12 +166,31 @@ func (app *App) Router() http.Handler {
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		subReady := make(chan struct{})
+
 		go func() {
 			ch := subscription.Channel()
+			close(subReady)
 			for msg := range ch {
 				s.Write([]byte(msg.Payload))
 			}
 		}()
+
+		<-subReady
+		msg, err := json.Marshal(ChatRpc{
+			JSONRPC: "2.0",
+			Method:  "chat",
+			Params:  "Hello, world!",
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = app.EventBus.Publish("messages:"+subscription.UserID, msg)
+		if err != nil {
+			log.Fatal(err)
+		}
 	})
 	app.websocket.HandleDisconnect(func(s *melody.Session) {
 		subscription, err := getUserSub(s)
