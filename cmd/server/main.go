@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -8,11 +9,10 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/urfave/cli/v2"
-	"github.com/urfave/cli/v2/altsrc"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/spf13/viper"
+
 	"github.com/isqad/livelook-sfu/internal/admin"
 	"github.com/isqad/livelook-sfu/internal/api"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
@@ -25,22 +25,27 @@ import (
 )
 
 func main() {
-	flags := []cli.Flag{
-		altsrc.NewStringFlag(&cli.StringFlag{Name: "db.host", Required: true}),
-		altsrc.NewStringFlag(&cli.StringFlag{Name: "db.port", Required: true}),
-		altsrc.NewStringFlag(&cli.StringFlag{Name: "db.name", Required: true}),
-		altsrc.NewStringFlag(&cli.StringFlag{Name: "db.user", Required: true}),
-		altsrc.NewStringFlag(&cli.StringFlag{Name: "db.password", Required: true}),
-		&cli.StringFlag{Name: "config"},
+	appEnv := os.Getenv("APP_ENV")
+	if appEnv == "" {
+		appEnv = "development"
 	}
 
-	_ = &cli.Command{
-		Name:   "sfu",
-		Flags:  flags,
-		Before: altsrc.InitInputSourceWithContext(flags, altsrc.NewYamlSourceFromFlagFunc("config")),
+	viper.SetConfigName("config." + appEnv)
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath("./configs")
+	err := viper.ReadInConfig()
+	if err != nil {
+		log.Fatalf("can not read config file: %v", err)
 	}
 
-	dataSrcName := "postgres://postgres:qwerty@localhost:15433/livelook"
+	dataSrcName := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s",
+		viper.GetString("db.user"),
+		viper.GetString("db.password"),
+		viper.GetString("db.host"),
+		viper.GetString("db.port"),
+		viper.GetString("db.name"),
+	)
 	db, err := sqlx.Connect("pgx", dataSrcName)
 	if err != nil {
 		log.Fatal(err)
@@ -50,7 +55,7 @@ func main() {
 	}
 
 	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: fmt.Sprintf("%s:%s", viper.GetString("redis.host"), viper.GetString("redis.port")),
 		DB:   0,
 	})
 
@@ -72,7 +77,13 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	// Mount admin
-	r.Mount("/admin", admin.NewApp(db, "https://localhost:3001/admin").Router())
+	r.Mount(
+		"/admin",
+		admin.NewApp(
+			db,
+			fmt.Sprintf("https://%s:%s/admin", viper.GetString("app.hostname"), viper.GetString("app.port")),
+		).Router(),
+	)
 	// Mount API
 	r.Mount("/api/v1", app.Router())
 
@@ -126,7 +137,7 @@ func main() {
 	r.Method("GET", "/favicon.ico", http.FileServer(http.Dir(staticDir)))
 
 	server := &http.Server{
-		Addr:              ":3001",
+		Addr:              ":" + viper.GetString("app.port"),
 		Handler:           r,
 		ReadHeaderTimeout: 1 * time.Second,
 		WriteTimeout:      10 * time.Second,

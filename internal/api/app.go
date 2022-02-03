@@ -13,6 +13,7 @@ import (
 	"github.com/isqad/livelook-sfu/internal/sfu"
 	"github.com/isqad/melody"
 	"github.com/jmoiron/sqlx"
+	"github.com/spf13/viper"
 )
 
 type ChatRpc struct {
@@ -86,7 +87,7 @@ func (app *App) Router() http.Handler {
 	})
 
 	app.router.With(
-		FirebaseAuthenticator("127.0.0.1:50053", app.authFailedFunc),
+		FirebaseAuthenticator(viper.GetString("firebase_auth_service.addr"), app.authFailedFunc),
 	).Route("/", func(r chi.Router) {
 		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
 			userID, err := extractUserID(r)
@@ -173,8 +174,7 @@ func (app *App) Router() http.Handler {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-
-			image := sfu.NewUserProfileImage(userID)
+			image := sfu.NewUserProfileImage(userID, viper.GetString("app.upload_root"))
 			imageStorer := sfu.NewUserProfileImageDbStorer(app.DB)
 			if err := image.UploadHandle(request, imageStorer); err != nil {
 				log.Printf("can't upload file: %+v", err)

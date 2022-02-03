@@ -13,5 +13,5 @@ func NewUserProfileImageDbStorer(db *sqlx.DB) userProfileImageDbStorage {
 // Save сохраняет аватар пользователя в БД
 func (s userProfileImageDbStorage) Save(img *UserProfileImage) (int64, error) {
 	s.db.Ping()
-	return 0, nil
+	return 100500, nil
 }
