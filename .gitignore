@@ -5,6 +5,7 @@ cmd/bin/*
 *.xls
 *.xlsx
 *.bak
+tmp/*
 !.gitkeep
 web/static/js/node_modules/
 web/static/js/dist/

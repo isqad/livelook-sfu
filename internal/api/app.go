@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -88,14 +89,18 @@ func (app *App) Router() http.Handler {
 		FirebaseAuthenticator("127.0.0.1:50053", app.authFailedFunc),
 	).Route("/", func(r chi.Router) {
 		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
-			userID, ok := r.Context().Value(UserIDContextKey).(string)
-			if !ok {
-				log.Fatal("can't get user ID from request context")
+			userID, err := extractUserID(r)
+			if err != nil {
+				log.Println("can't get user ID from request context")
+				w.WriteHeader(http.StatusBadRequest)
+				return
 			}
 
 			userSub, err := app.EventBus.SubscribeUser(userID) // TODO
 			if err != nil {
-				log.Fatal(err)
+				log.Printf("can't subscribe the user: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
 
 			sessKeys := make(map[string]interface{})
@@ -159,6 +164,47 @@ func (app *App) Router() http.Handler {
 
 			w.WriteHeader(http.StatusOK)
 		})
+
+		// API для добавления аваторки пользователя
+		r.Post("/profile/images", func(w http.ResponseWriter, request *http.Request) {
+			userID, err := extractUserID(request)
+			if err != nil {
+				log.Println("can't get user ID from request context")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			image := sfu.NewUserProfileImage(userID)
+			imageStorer := sfu.NewUserProfileImageDbStorer(app.DB)
+			if err := image.UploadHandle(request, imageStorer); err != nil {
+				log.Printf("can't upload file: %+v", err)
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				return
+			}
+
+			w.WriteHeader(http.StatusOK)
+		})
+
+		// API для получения списка всех диалогов пользователя
+		// GET /api/v1/dialogs
+		//
+		// TODO:
+		// - пагинация
+		r.Get("/dialogs", func(w http.ResponseWriter, r *http.Request) {
+
+		})
+		// API для получения сообщений диалога
+		// GET /api/v1/dialogs/:id
+		// TODO: пагинация
+		r.Get("/dialogs/{id}", func(w http.ResponseWriter, r *http.Request) {
+
+		})
+		// API для создания диалога
+		// POST /api/v1/dialogs
+		r.Post("/dialogs", func(w http.ResponseWriter, r *http.Request) {})
+		// API для отправки сообщения
+		// POST /api/v1/dialogs/{id}/messages
+		r.Post("/dialogs/{id}/messages", func(w http.ResponseWriter, r *http.Request) {})
 	})
 
 	app.websocket.HandleConnect(func(s *melody.Session) {
@@ -222,4 +268,14 @@ func getUserSub(s *melody.Session) (*eventbus.UserSubscription, error) {
 		return nil, fmt.Errorf("Cann't convert userSub: %+v", userSub)
 	}
 	return subscription, nil
+}
+
+// extractUserID извлекает userID из контекста запроса
+func extractUserID(r *http.Request) (string, error) {
+	userID, ok := r.Context().Value(UserIDContextKey).(string)
+	if !ok {
+		return "", errors.New("can't get user ID from request context")
+	}
+
+	return userID, nil
 }
