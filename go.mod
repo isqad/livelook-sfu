@@ -12,7 +12,7 @@ require (
 	github.com/jackc/pgx/v4 v4.14.1
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/pion/rtcp v1.2.9
-	github.com/pion/webrtc/v3 v3.1.22
+	github.com/pion/webrtc/v3 v3.1.23
 	github.com/stretchr/testify v1.7.0
 	google.golang.org/grpc v1.44.0
 )
