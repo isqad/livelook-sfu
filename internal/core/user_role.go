@@ -1,4 +1,4 @@
-package sfu
+package core
 
 // UserRoleName is type of user role
 type UserRoleName string

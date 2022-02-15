@@ -1,4 +1,4 @@
-package sfu
+package core
 
 import "github.com/jmoiron/sqlx"
 

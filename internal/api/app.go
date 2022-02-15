@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/livelook-sfu/internal/sfu"
 	"github.com/isqad/melody"
@@ -112,7 +113,7 @@ func (app *App) Router() http.Handler {
 		})
 
 		r.Post("/users", func(w http.ResponseWriter, r *http.Request) {
-			user := sfu.NewUser()
+			user := core.NewUser()
 			err := json.NewDecoder(r.Body).Decode(user)
 			if err != nil {
 				log.Println(err)
@@ -175,8 +176,8 @@ func (app *App) Router() http.Handler {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			image := sfu.NewUserProfileImage(userID, viper.GetString("app.upload_root"))
-			imageStorer := sfu.NewUserProfileImageDbStorer(app.DB)
+			image := core.NewUserProfileImage(userID, viper.GetString("app.upload_root"))
+			imageStorer := core.NewUserProfileImageDbStorer(app.DB)
 			if err := image.UploadHandle(request, imageStorer); err != nil {
 				log.Printf("can't upload file: %+v", err)
 				w.WriteHeader(http.StatusUnprocessableEntity)
@@ -217,7 +218,7 @@ func (app *App) Router() http.Handler {
 				return
 			}
 
-			user, err := sfu.FindUserByUID(app.DB, userID)
+			user, err := core.FindUserByUID(app.DB, userID)
 			if err != nil {
 				if err == sql.ErrNoRows {
 					log.Println("can't find user")
