@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -205,6 +206,36 @@ func (app *App) Router() http.Handler {
 		// API для отправки сообщения
 		// POST /api/v1/dialogs/{id}/messages
 		r.Post("/dialogs/{id}/messages", func(w http.ResponseWriter, r *http.Request) {})
+
+		// API для получения информации о пользователе
+		// GET /api/v1/current_user
+		r.Get("/current_user", func(w http.ResponseWriter, request *http.Request) {
+			userID, err := extractUserID(request)
+			if err != nil {
+				log.Printf("can't get user ID from request context: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			user, err := sfu.FindUserByUID(app.DB, userID)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					log.Println("can't find user")
+					w.WriteHeader(http.StatusNotFound)
+				} else {
+					log.Printf("can't find user: %v", err)
+					w.WriteHeader(http.StatusBadRequest)
+				}
+
+				return
+			}
+
+			if err := json.NewEncoder(w).Encode(user); err != nil {
+				log.Println(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		})
 	})
 
 	app.websocket.HandleConnect(func(s *melody.Session) {
@@ -261,11 +292,11 @@ func (app *App) authFailedFunc(w http.ResponseWriter, r *http.Request, err error
 func getUserSub(s *melody.Session) (*eventbus.UserSubscription, error) {
 	userSub, ok := s.Keys["sub"]
 	if !ok {
-		return nil, fmt.Errorf("No sub for given session: %+v", s)
+		return nil, fmt.Errorf("no sub for given session: %+v", s)
 	}
 	subscription, ok := userSub.(*eventbus.UserSubscription)
 	if !ok {
-		return nil, fmt.Errorf("Cann't convert userSub: %+v", userSub)
+		return nil, fmt.Errorf("can't convert userSub: %+v", userSub)
 	}
 	return subscription, nil
 }
