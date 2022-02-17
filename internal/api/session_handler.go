@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -44,27 +45,10 @@ func SessionUpdateHandler(
 		}
 
 		if session.Sdp != nil {
-			err = session.EstablishPeerConnection()
+			err = initPeerConnection(session, eventsPublisher, w)
 			if err != nil {
-				log.Printf("can't establish session connection: %v", err)
+				log.Printf("can't establish peer connection: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			answer, err := session.CreateWebrtcAnswer()
-			if err != nil {
-				log.Printf("can't create answer: %v", err)
-				log.Printf("close session pc: %v", session.Close())
-				w.WriteHeader(http.StatusInternalServerError)
-
-				return
-			}
-
-			if err := eventsPublisher.Publish(userID, answer); err != nil {
-				log.Printf("can't send answer: %v", err)
-				log.Printf("close session pc: %v", session.Close())
-				w.WriteHeader(http.StatusInternalServerError)
-
 				return
 			}
 		}
@@ -78,4 +62,26 @@ func SessionUpdateHandler(
 
 		w.WriteHeader(http.StatusOK)
 	}
+}
+
+func initPeerConnection(session *sfu.Session, eventsPublisher eventbus.Publisher, w http.ResponseWriter) error {
+	err := session.EstablishPeerConnection()
+	if err != nil {
+		return err
+	}
+
+	answer, err := session.CreateWebrtcAnswer()
+	if err != nil {
+		return errInitPeerConnection(session, err)
+	}
+
+	if err := eventsPublisher.Publish(session.UserID, answer); err != nil {
+		return errInitPeerConnection(session, err)
+	}
+
+	return nil
+}
+
+func errInitPeerConnection(session *sfu.Session, err error) error {
+	return fmt.Errorf("%v, close session pc: %v", err, session.Close())
 }
