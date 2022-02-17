@@ -16,7 +16,6 @@ import (
 	"github.com/isqad/livelook-sfu/internal/admin"
 	"github.com/isqad/livelook-sfu/internal/api"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
-	"github.com/isqad/livelook-sfu/internal/sfu"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
@@ -59,15 +58,12 @@ func main() {
 		DB:   0,
 	})
 
-	broadcastsRepo := sfu.NewBroadcastsRepository(db)
-	ebus := eventbus.New(rdb)
-	sup := sfu.NewBroadcastsSupervisor(broadcastsRepo, ebus)
+	redisPubSub := eventbus.RedisPubSub(rdb)
 	app := api.NewApp(
 		api.AppOptions{
-			DB:                   db,
-			BroadcastsRepository: broadcastsRepo,
-			BroadcastsSupervisor: sup,
-			EventBus:             ebus,
+			DB:               db,
+			EventsPublisher:  redisPubSub,
+			EventsSubscriber: redisPubSub,
 		},
 	)
 

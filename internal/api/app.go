@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/isqad/livelook-sfu/internal/core"
@@ -26,13 +25,15 @@ type ChatRpc struct {
 
 // AppOptions is options of the application
 type AppOptions struct {
-	DB                   *sqlx.DB
-	BroadcastsRepository *sfu.BroadcastsRepository
-	BroadcastsSupervisor *sfu.BroadcastsSupervisor
-	EventBus             *eventbus.Eventbus
+	DB               *sqlx.DB
+	EventsPublisher  eventbus.Publisher
+	EventsSubscriber eventbus.Subscriber
 
-	router    *chi.Mux
-	websocket *melody.Melody
+	router         *chi.Mux
+	websocket      *melody.Melody
+	authMiddleware FirebaseAuthHandler
+
+	sessionsStorage sfu.SessionsDBStorer
 }
 
 // App is application for API
@@ -46,6 +47,14 @@ func NewApp(options AppOptions) *App {
 	options.websocket = melody.New()
 	options.websocket.Config.MaxMessageSize = 1024
 
+	firebaseAuth := NewFirebaseAuth()
+	firebaseAuth.Addr = viper.GetString("firebase_auth_service.addr")
+	firebaseAuth.AuthFailFunc = authFailedFunc
+
+	options.authMiddleware = firebaseAuth.Middleware()
+
+	options.sessionsStorage = sfu.NewSessionsRepository(options.DB)
+
 	app := &App{
 		options,
 	}
@@ -54,43 +63,7 @@ func NewApp(options AppOptions) *App {
 
 // Router is function for construct http router
 func (app *App) Router() http.Handler {
-	app.router.Get("/broadcasts", func(w http.ResponseWriter, r *http.Request) {
-		var (
-			page    int
-			perPage int
-			err     error
-		)
-
-		if pageParam := r.URL.Query().Get("p"); pageParam != "" {
-			page, err = strconv.Atoi(pageParam)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-		if perPageParam := r.URL.Query().Get("limit"); perPageParam != "" {
-			page, err = strconv.Atoi(perPageParam)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-		broadcasts, err := app.BroadcastsRepository.GetAll(page, perPage)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		resp, err := json.Marshal(broadcasts)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if _, err := w.Write(resp); err != nil {
-			log.Fatal(err)
-		}
-	})
-
-	app.router.With(
-		FirebaseAuthenticator(viper.GetString("firebase_auth_service.addr"), app.authFailedFunc),
-	).Route("/", func(r chi.Router) {
+	app.router.With(app.authMiddleware).Route("/", func(r chi.Router) {
 		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
 			userID, err := extractUserID(r)
 			if err != nil {
@@ -99,7 +72,7 @@ func (app *App) Router() http.Handler {
 				return
 			}
 
-			userSub, err := app.EventBus.SubscribeUser(userID) // TODO
+			userSub, err := app.EventsSubscriber.SubscribeUser(userID) // TODO
 			if err != nil {
 				log.Printf("can't subscribe the user: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -133,40 +106,7 @@ func (app *App) Router() http.Handler {
 			}
 		})
 
-		r.Post("/broadcasts", func(w http.ResponseWriter, r *http.Request) {
-			req := &sfu.BroadcastRequest{}
-
-			err := json.NewDecoder(r.Body).Decode(req)
-			if err != nil {
-				log.Println(err)
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			if err := app.BroadcastsSupervisor.CreateBroadcast(req); err != nil {
-				log.Fatal(err)
-			}
-
-			w.WriteHeader(http.StatusOK)
-		})
-
-		r.Post("/broadcasts/{id}/viewers", func(w http.ResponseWriter, r *http.Request) {
-			broadcastID := chi.URLParam(r, "id")
-			req := &sfu.ViewerRequest{}
-
-			err := json.NewDecoder(r.Body).Decode(req)
-			if err != nil {
-				log.Println(err)
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			if err := app.BroadcastsSupervisor.AddViewer(broadcastID, req); err != nil {
-				log.Fatal(err)
-			}
-
-			w.WriteHeader(http.StatusOK)
-		})
+		r.Put("/session", SessionUpdateHandler(app.sessionsStorage, app.EventsPublisher))
 
 		// API для добавления аваторки пользователя
 		r.Post("/profile/images", func(w http.ResponseWriter, request *http.Request) {
@@ -265,7 +205,7 @@ func (app *App) Router() http.Handler {
 			log.Fatal(err)
 		}
 
-		err = app.EventBus.Publish("messages:"+subscription.UserID, msg)
+		err = app.EventsPublisher.Publish(subscription.UserID, msg)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -286,7 +226,7 @@ func (app *App) Router() http.Handler {
 	return app.router
 }
 
-func (app *App) authFailedFunc(w http.ResponseWriter, r *http.Request, err error) {
+func authFailedFunc(w http.ResponseWriter, r *http.Request, err error) {
 	w.WriteHeader(http.StatusUnauthorized)
 }
 

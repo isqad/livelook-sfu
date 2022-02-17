@@ -20,24 +20,48 @@ const (
 // AuthFailFunc is function that is called when authentication failed
 type AuthFailFunc func(w http.ResponseWriter, r *http.Request, err error)
 
-var xAuth = http.CanonicalHeaderKey("X-Auth")
+// OptFirebaseAuthHandler is optional handler for mocking in tests
+type FirebaseAuthHandler func(next http.Handler) http.Handler
 
-// FirebaseAuthenticator is a middleware that verifies token from Firebase Auth
-func FirebaseAuthenticator(firebaseAuthServiceAddr string, authFailFunc AuthFailFunc) func(next http.Handler) http.Handler {
+var (
+	xAuth             = http.CanonicalHeaderKey("X-Auth")
+	ErrEmptyAuthToken = errors.New("empty auth token")
+)
+
+type FirebaseAuth struct {
+	Addr         string
+	AuthFailFunc AuthFailFunc
+	StubHandler  FirebaseAuthHandler
+}
+
+func NewFirebaseAuth() *FirebaseAuth {
+	return &FirebaseAuth{}
+}
+
+// Middleware is a middleware that verifies token from Firebase Auth
+func (m *FirebaseAuth) Middleware() FirebaseAuthHandler {
+	if m.StubHandler != nil {
+		return m.StubHandler
+	}
+
+	return m.defaultMiddleware()
+}
+
+func (m *FirebaseAuth) defaultMiddleware() FirebaseAuthHandler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := r.Header.Get(xAuth)
 			if token == "" {
-				authFailFunc(w, r, errors.New("emtpy token"))
+				m.authFailed(w, r, ErrEmptyAuthToken)
 				return
 			}
 
-			conn, err := grpc.Dial(firebaseAuthServiceAddr, []grpc.DialOption{
+			conn, err := grpc.Dial(m.Addr, []grpc.DialOption{
 				grpc.WithInsecure(),
 				grpc.WithBlock(),
 			}...)
 			if err != nil {
-				authFailFunc(w, r, err)
+				m.authFailed(w, r, err)
 				return
 			}
 			defer conn.Close()
@@ -48,12 +72,20 @@ func FirebaseAuthenticator(firebaseAuthServiceAddr string, authFailFunc AuthFail
 
 			t, err := authClient.Verify(ctx, &firebase.Token{Token: token})
 			if err != nil {
-				authFailFunc(w, r, err)
+				m.authFailed(w, r, err)
 				return
 			}
 
 			ctx = context.WithValue(r.Context(), UserIDContextKey, t.GetUserId())
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
+	}
+}
+
+func (m *FirebaseAuth) authFailed(w http.ResponseWriter, r *http.Request, err error) {
+	if m.AuthFailFunc != nil {
+		m.AuthFailFunc(w, r, err)
+	} else {
+		w.WriteHeader(http.StatusUnauthorized)
 	}
 }

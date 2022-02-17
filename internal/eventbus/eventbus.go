@@ -7,29 +7,38 @@ import (
 )
 
 type Publisher interface {
-	Publish(channel string, message interface{}) error
+	Publish(userID string, message interface{}) error
+}
+
+type Subscriber interface {
+	SubscribeUser(userID string) (*UserSubscription, error)
 }
 
 type Eventbus struct {
 	rdb *redis.Client
 }
 
-func New(rdb *redis.Client) *Eventbus {
+// RedisPubSub is factory for building Eventbus based on redis pubsub
+func RedisPubSub(rdb *redis.Client) *Eventbus {
 	return &Eventbus{rdb: rdb}
 }
 
-func (e *Eventbus) Publish(channel string, message interface{}) error {
-	return e.rdb.Publish(context.Background(), channel, message).Err()
+func (e *Eventbus) Publish(userID string, message interface{}) error {
+	return e.rdb.Publish(context.Background(), userMessagesChannel(userID), message).Err()
 }
 
 func (e *Eventbus) SubscribeUser(userID string) (*UserSubscription, error) {
 	ctx := context.Background()
 	// Subscribe user to messages
-	pubsub := e.rdb.Subscribe(ctx, "messages:"+userID)
+	pubsub := e.rdb.Subscribe(ctx, userMessagesChannel(userID))
 	// Wait until subscription is created
 	if _, err := pubsub.Receive(ctx); err != nil {
 		return nil, err
 	}
 
 	return &UserSubscription{UserID: userID, pubsub: pubsub}, nil
+}
+
+func userMessagesChannel(userID string) string {
+	return "messages:" + userID
 }
