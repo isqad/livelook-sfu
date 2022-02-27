@@ -2,6 +2,7 @@ package eventbus
 
 import (
 	"context"
+	"log"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -24,6 +25,7 @@ func RedisPubSub(rdb *redis.Client) *Eventbus {
 }
 
 func (e *Eventbus) Publish(userID string, message interface{}) error {
+	log.Printf("Publish: %v, %v", userID, message)
 	return e.rdb.Publish(context.Background(), userMessagesChannel(userID), message).Err()
 }
 

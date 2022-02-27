@@ -1,13 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/livelook-sfu/internal/sfu"
+	"github.com/jmoiron/sqlx"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -18,49 +19,51 @@ type SessionRequest struct {
 	Sdp           webrtc.SessionDescription `json:"sdp,omitempty"`
 }
 
-func SessionUpdateHandler(
+func SessionCreateHandler(
 	sessionStorage sfu.SessionsDBStorer,
 	eventsPublisher eventbus.Publisher,
+	db *sqlx.DB, // replace to UserRepository
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, err := extractUserID(r)
+		user, err := userFromRequest(db, r)
 		if err != nil {
 			log.Printf("can't get user ID from request context: %v", err)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		err = r.ParseMultipartForm(32 << 20) // maxMemory 32MB
-		if err != nil {
-			log.Printf("can't parse multipart form: %v", err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		session, err := sfu.NewSessionFromReader(userID, strings.NewReader(r.FormValue("session")))
+		session, err := sfu.NewSessionFromReader(user.ID, r.Body)
 		if err != nil {
 			log.Printf("can't parse session: %v", err)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		if session.Sdp != nil {
-			err = initPeerConnection(session, eventsPublisher, w)
-			if err != nil {
-				log.Printf("can't establish peer connection: %v", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
+		if session.Sdp == nil {
+			log.Println("no sdp in session")
+			w.WriteHeader(http.StatusBadRequest)
+			return
 		}
 
-		_, err = sessionStorage.Save(session)
+		err = initPeerConnection(session, eventsPublisher, w)
+		if err != nil {
+			log.Printf("can't establish peer connection: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		session, err = sessionStorage.Save(session)
 		if err != nil {
 			log.Printf("can't save session: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(session); err != nil {
+			log.Printf("can't encode session: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 }
 

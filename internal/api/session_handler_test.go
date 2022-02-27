@@ -68,7 +68,7 @@ func (e *MockEventBus) Publish(userID string, message interface{}) error {
 	return e.MockErr
 }
 
-func TestSessionUpdateHandler(t *testing.T) {
+func TestSessionCreateHandler(t *testing.T) {
 	userID := "foo-bar-42"
 	firebaseAuth := NewFirebaseAuth()
 	firebaseAuth.StubHandler = func(next http.Handler) http.Handler {
@@ -87,7 +87,7 @@ func TestSessionUpdateHandler(t *testing.T) {
 		sessionsStorage := &MockSessionStorage{}
 		bus := &MockEventBus{}
 
-		r.Put("/", SessionUpdateHandler(sessionsStorage, bus))
+		r.Post("/", SessionCreateHandler(sessionsStorage, bus, nil))
 		ts := httptest.NewServer(r)
 		defer ts.Close()
 
@@ -95,16 +95,8 @@ func TestSessionUpdateHandler(t *testing.T) {
 		sessionJson, err := json.Marshal(sessionRequest)
 		assert.Nil(t, err)
 
-		bodyReader := strings.NewReader(
-			"--foo\r\n" +
-				"Content-Disposition: form-data; name=\"session\"\r\n" +
-				"\r\n" + string(sessionJson) +
-				"\r\n--foo--\r\n",
-		)
-
-		req, err := http.NewRequest("PUT", ts.URL, bodyReader)
+		req, err := http.NewRequest("POST", ts.URL, strings.NewReader(string(sessionJson)))
 		assert.Nil(t, err)
-		req.Header.Add("Content-Type", "multipart/form-data; boundary=foo")
 
 		resp, err := http.DefaultClient.Do(req)
 		assert.Nil(t, err)
@@ -136,7 +128,7 @@ func TestSessionUpdateHandler(t *testing.T) {
 		}
 		bus := &MockEventBus{}
 
-		r.Put("/", SessionUpdateHandler(sessionsStorage, bus))
+		r.Put("/", SessionCreateHandler(sessionsStorage, bus, nil))
 		ts := httptest.NewServer(r)
 		defer ts.Close()
 
@@ -144,14 +136,7 @@ func TestSessionUpdateHandler(t *testing.T) {
 		sessionJson, err := json.Marshal(sessionRequest)
 		assert.Nil(t, err)
 
-		bodyReader := strings.NewReader(
-			"--foo\r\n" +
-				"Content-Disposition: form-data; name=\"session\"\r\n" +
-				"\r\n" + string(sessionJson) +
-				"\r\n--foo--\r\n",
-		)
-		req, err := http.NewRequest("PUT", ts.URL, bodyReader)
-		req.Header.Add("Content-Type", "multipart/form-data; boundary=foo")
+		req, err := http.NewRequest("PUT", ts.URL, strings.NewReader(string(sessionJson)))
 		assert.Nil(t, err)
 
 		resp, err := http.DefaultClient.Do(req)
@@ -171,7 +156,7 @@ func TestSessionUpdateHandler(t *testing.T) {
 		bus := &MockEventBus{
 			MockErr: errors.New("Bam!"),
 		}
-		r.Put("/", SessionUpdateHandler(sessionsStorage, bus))
+		r.Put("/", SessionCreateHandler(sessionsStorage, bus, nil))
 		ts := httptest.NewServer(r)
 		defer ts.Close()
 
@@ -179,14 +164,7 @@ func TestSessionUpdateHandler(t *testing.T) {
 		sessionJson, err := json.Marshal(sessionRequest)
 		assert.Nil(t, err)
 
-		bodyReader := strings.NewReader(
-			"--foo\r\n" +
-				"Content-Disposition: form-data; name=\"session\"\r\n" +
-				"\r\n" + string(sessionJson) +
-				"\r\n--foo--\r\n",
-		)
-		req, err := http.NewRequest("PUT", ts.URL, bodyReader)
-		req.Header.Add("Content-Type", "multipart/form-data; boundary=foo")
+		req, err := http.NewRequest("PUT", ts.URL, strings.NewReader(string(sessionJson)))
 		assert.Nil(t, err)
 
 		resp, err := http.DefaultClient.Do(req)
