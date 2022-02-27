@@ -64,26 +64,8 @@ func NewApp(options AppOptions) *App {
 // Router is function for construct http router
 func (app *App) Router() http.Handler {
 	app.router.With(app.authMiddleware).Route("/", func(r chi.Router) {
-		r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
-			userID, err := extractUserID(r)
-			if err != nil {
-				log.Println("can't get user ID from request context")
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			userSub, err := app.EventsSubscriber.SubscribeUser(userID) // TODO
-			if err != nil {
-				log.Printf("can't subscribe the user: %v", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			sessKeys := make(map[string]interface{})
-			sessKeys["sub"] = userSub
-
-			app.websocket.HandleRequestWithKeys(w, r, sessKeys)
-		})
+		r.Get("/ws", WebsocketsHandler(app.EventsSubscriber, app.DB, app.websocket))
+		r.Post("/session", SessionCreateHandler(app.sessionsStorage, app.EventsPublisher, app.DB))
 
 		r.Post("/users", func(w http.ResponseWriter, r *http.Request) {
 			user := core.NewUser()
@@ -105,8 +87,6 @@ func (app *App) Router() http.Handler {
 				return
 			}
 		})
-
-		r.Put("/session", SessionUpdateHandler(app.sessionsStorage, app.EventsPublisher))
 
 		// API для добавления аваторки пользователя
 		r.Post("/profile/images", func(w http.ResponseWriter, request *http.Request) {
@@ -191,6 +171,7 @@ func (app *App) Router() http.Handler {
 			ch := subscription.Channel()
 			close(subReady)
 			for msg := range ch {
+				log.Printf("send message: %v", msg.Payload)
 				s.Write([]byte(msg.Payload))
 			}
 		}()
@@ -240,6 +221,21 @@ func getUserSub(s *melody.Session) (*eventbus.UserSubscription, error) {
 		return nil, fmt.Errorf("can't convert userSub: %+v", userSub)
 	}
 	return subscription, nil
+}
+
+// userFromRequest извлекает User из контекста запроса
+func userFromRequest(db *sqlx.DB, r *http.Request) (*core.User, error) {
+	uid, err := extractUserID(r)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := core.FindUserByUID(db, uid)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
 
 // extractUserID извлекает userID из контекста запроса
