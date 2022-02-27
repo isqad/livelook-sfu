@@ -59,7 +59,7 @@ func main() {
 	})
 
 	redisPubSub := eventbus.RedisPubSub(rdb)
-	app := api.NewApp(
+	apiApp := api.NewApp(
 		api.AppOptions{
 			DB:               db,
 			EventsPublisher:  redisPubSub,
@@ -81,7 +81,7 @@ func main() {
 		).Router(),
 	)
 	// Mount API
-	r.Mount("/api/v1", app.Router())
+	r.Mount("/api/v1", apiApp.Router())
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		tmpl, err := template.New("app").ParseFiles(
