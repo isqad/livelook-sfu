@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -61,16 +62,24 @@ func NewSessionFromReader(userID string, r io.Reader) (*Session, error) {
 	return s, nil
 }
 
-func (s *Session) EstablishPeerConnection() error {
+func (s *Session) EstablishPeerConnection(eventsPublisher eventbus.Publisher) error {
 	peerConnection, err := webrtc.NewPeerConnection(peerConnectionConfig)
 	if err != nil {
 		return err
 	}
 
-	if _, err := peerConnection.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio); err != nil {
+	peerConnection.OnICECandidate(s.onICECandidate(eventsPublisher))
+
+	if _, err := peerConnection.AddTransceiverFromKind(
+		webrtc.RTPCodecTypeAudio,
+		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendrecv},
+	); err != nil {
 		return err
 	}
-	if _, err := peerConnection.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo); err != nil {
+	if _, err := peerConnection.AddTransceiverFromKind(
+		webrtc.RTPCodecTypeVideo,
+		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendrecv},
+	); err != nil {
 		return err
 	}
 
@@ -84,23 +93,36 @@ func (s *Session) EstablishPeerConnection() error {
 	return nil
 }
 
-func (s *Session) CreateWebrtcAnswer() ([]byte, error) {
+func (s *Session) CreateWebrtcAnswer() (eventbus.SDPRpc, error) {
 	answer, err := s.PeerConnection.CreateAnswer(nil)
 	if err != nil {
-		return nil, err
+		return eventbus.SDPRpc{}, err
 	}
-	gatherComplete := webrtc.GatheringCompletePromise(s.PeerConnection)
+
 	err = s.PeerConnection.SetLocalDescription(answer)
 	if err != nil {
-		return nil, err
+		return eventbus.SDPRpc{}, err
 	}
-	<-gatherComplete
-	// TODO: ICE Trickle
-	log.Println("ICE candidates gathered!")
 
-	return NewSdpJSONRpc(s.PeerConnection.LocalDescription(), "answer")
+	return eventbus.NewSDPAnswerRpc(s.PeerConnection.LocalDescription()), nil
 }
 
 func (s *Session) Close() error {
 	return s.PeerConnection.Close()
+}
+
+func (s *Session) onICECandidate(eventsPublisher eventbus.Publisher) func(*webrtc.ICECandidate) {
+	return func(candidate *webrtc.ICECandidate) {
+		if candidate == nil {
+			log.Println("No more ICE candidates")
+			return
+		}
+
+		rpc := eventbus.NewICECandidateRpc(candidate.ToJSON())
+
+		if err := eventsPublisher.PublishClient(s.UserID, rpc); err != nil {
+			log.Printf("onICECandidate: error %v", err)
+			return
+		}
+	}
 }

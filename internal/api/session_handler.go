@@ -68,7 +68,7 @@ func SessionCreateHandler(
 }
 
 func initPeerConnection(session *sfu.Session, eventsPublisher eventbus.Publisher, w http.ResponseWriter) error {
-	err := session.EstablishPeerConnection()
+	err := session.EstablishPeerConnection(eventsPublisher)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func initPeerConnection(session *sfu.Session, eventsPublisher eventbus.Publisher
 		return errInitPeerConnection(session, err)
 	}
 
-	if err := eventsPublisher.Publish(session.UserID, answer); err != nil {
+	if err := eventsPublisher.PublishClient(session.UserID, answer); err != nil {
 		return errInitPeerConnection(session, err)
 	}
 

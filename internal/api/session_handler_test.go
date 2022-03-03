@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/livelook-sfu/internal/sfu"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
@@ -58,12 +59,18 @@ func (s *MockSessionStorage) Save(session *sfu.Session) (*sfu.Session, error) {
 }
 
 type MockEventBus struct {
-	PublishedMessage []byte
+	PublishedMessage *eventbus.Rpc
 	MockErr          error
 }
 
-func (e *MockEventBus) Publish(userID string, message interface{}) error {
-	e.PublishedMessage = message.([]byte)
+func (e *MockEventBus) PublishClient(userID string, rpc eventbus.Rpc) error {
+	e.PublishedMessage = &rpc
+
+	return e.MockErr
+}
+
+func (e *MockEventBus) PublishServer(userID string, rpc eventbus.Rpc) error {
+	e.PublishedMessage = &rpc
 
 	return e.MockErr
 }
@@ -113,7 +120,7 @@ func TestSessionCreateHandler(t *testing.T) {
 		assert.NotNil(t, sessionsStorage.CurrentSession.CreatedAt)
 		assert.NotNil(t, sessionsStorage.CurrentSession.UpdatedAt)
 		assert.NotNil(t, sessionsStorage.CurrentSession.PeerConnection)
-		assert.Greater(t, len(bus.PublishedMessage), 0)
+		assert.NotNil(t, bus.PublishedMessage)
 		assert.Equal(t, minimalOfferSdp, *sessionsStorage.CurrentSession.Sdp)
 	})
 

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -159,68 +158,15 @@ func (app *App) Router() http.Handler {
 		})
 	})
 
-	app.websocket.HandleConnect(func(s *melody.Session) {
-		subscription, err := getUserSub(s)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		subReady := make(chan struct{})
-
-		go func() {
-			ch := subscription.Channel()
-			close(subReady)
-			for msg := range ch {
-				log.Printf("send message: %v", msg.Payload)
-				s.Write([]byte(msg.Payload))
-			}
-		}()
-
-		<-subReady
-		msg, err := json.Marshal(ChatRpc{
-			JSONRPC: "2.0",
-			Method:  "chat",
-			Params:  "Hello, world!",
-		})
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = app.EventsPublisher.Publish(subscription.UserID, msg)
-		if err != nil {
-			log.Fatal(err)
-		}
-	})
-	app.websocket.HandleDisconnect(func(s *melody.Session) {
-		subscription, err := getUserSub(s)
-		if err != nil {
-			log.Fatal(err)
-		}
-		err = subscription.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Println("User disconnected")
-		// TODO: stop user's broadcast
-	})
+	app.websocket.HandleConnect(ConnectHandler)
+	app.websocket.HandleDisconnect(DisconnectHandler)
+	app.websocket.HandleMessage(HandleMessage(app.EventsPublisher))
 
 	return app.router
 }
 
 func authFailedFunc(w http.ResponseWriter, r *http.Request, err error) {
 	w.WriteHeader(http.StatusUnauthorized)
-}
-
-func getUserSub(s *melody.Session) (*eventbus.UserSubscription, error) {
-	userSub, ok := s.Keys["sub"]
-	if !ok {
-		return nil, fmt.Errorf("no sub for given session: %+v", s)
-	}
-	subscription, ok := userSub.(*eventbus.UserSubscription)
-	if !ok {
-		return nil, fmt.Errorf("can't convert userSub: %+v", userSub)
-	}
-	return subscription, nil
 }
 
 // userFromRequest извлекает User из контекста запроса

@@ -1,81 +1,73 @@
 package sfu
 
-import (
-	"fmt"
-	"sync"
+// type BroadcastsSupervisor struct {
+// 	Broadcasts          map[string]*Broadcast
+// 	mutex               sync.RWMutex
+// 	broadcastRepository BroadcastsDBStorer
+// 	publisher           eventbus.Publisher
+// }
 
-	"github.com/google/uuid"
-	"github.com/isqad/livelook-sfu/internal/eventbus"
-)
+// func NewBroadcastsSupervisor(broadcastRepository BroadcastsDBStorer, publisher eventbus.Publisher) *BroadcastsSupervisor {
+// 	return &BroadcastsSupervisor{
+// 		Broadcasts:          make(map[string]*Broadcast),
+// 		broadcastRepository: broadcastRepository,
+// 		publisher:           publisher,
+// 	}
+// }
 
-type BroadcastsSupervisor struct {
-	Broadcasts          map[string]*Broadcast
-	mutex               sync.RWMutex
-	broadcastRepository BroadcastsDBStorer
-	publisher           eventbus.Publisher
-}
+// func (s *BroadcastsSupervisor) CreateBroadcast(req *BroadcastRequest) error {
+// 	broadcast, err := NewBroadcast(
+// 		uuid.NewString(),
+// 		req.UserID,
+// 		req.Title,
+// 		req.Sdp,
+// 	)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	// FIXME: init broadcast in background
+// 	if err := broadcast.Start(s.broadcastRepository, s.publisher); err != nil {
+// 		return err
+// 	}
 
-func NewBroadcastsSupervisor(broadcastRepository BroadcastsDBStorer, publisher eventbus.Publisher) *BroadcastsSupervisor {
-	return &BroadcastsSupervisor{
-		Broadcasts:          make(map[string]*Broadcast),
-		broadcastRepository: broadcastRepository,
-		publisher:           publisher,
-	}
-}
+// 	s.mutex.Lock()
+// 	defer s.mutex.Unlock()
 
-func (s *BroadcastsSupervisor) CreateBroadcast(req *BroadcastRequest) error {
-	broadcast, err := NewBroadcast(
-		uuid.NewString(),
-		req.UserID,
-		req.Title,
-		req.Sdp,
-	)
-	if err != nil {
-		return err
-	}
-	// FIXME: init broadcast in background
-	if err := broadcast.Start(s.broadcastRepository, s.publisher); err != nil {
-		return err
-	}
+// 	s.Broadcasts[broadcast.ID] = broadcast
 
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+// 	return nil
+// }
 
-	s.Broadcasts[broadcast.ID] = broadcast
+// func (s *BroadcastsSupervisor) AddViewer(broadcastID string, req *ViewerRequest) error {
+// 	viewer, err := NewViewer(
+// 		uuid.NewString(),
+// 		req.UserID,
+// 		req.Sdp,
+// 	)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	broadcast, err := s.getBroadcast(broadcastID)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if err := broadcast.addViewer(viewer); err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	if err := viewer.Start(s.publisher); err != nil {
+// 		return err
+// 	}
 
-func (s *BroadcastsSupervisor) AddViewer(broadcastID string, req *ViewerRequest) error {
-	viewer, err := NewViewer(
-		uuid.NewString(),
-		req.UserID,
-		req.Sdp,
-	)
-	if err != nil {
-		return err
-	}
-	broadcast, err := s.getBroadcast(broadcastID)
-	if err != nil {
-		return err
-	}
-	if err := broadcast.addViewer(viewer); err != nil {
-		return err
-	}
+// 	return nil
+// }
 
-	if err := viewer.Start(s.publisher); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *BroadcastsSupervisor) getBroadcast(broadcastID string) (*Broadcast, error) {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-	broadcast, ok := s.Broadcasts[broadcastID]
-	if !ok {
-		return nil, fmt.Errorf("Not found broadcast via ID: %v", broadcastID)
-	}
-	return broadcast, nil
-}
+// func (s *BroadcastsSupervisor) getBroadcast(broadcastID string) (*Broadcast, error) {
+// 	s.mutex.RLock()
+// 	defer s.mutex.RUnlock()
+// 	broadcast, ok := s.Broadcasts[broadcastID]
+// 	if !ok {
+// 		return nil, fmt.Errorf("Not found broadcast via ID: %v", broadcastID)
+// 	}
+// 	return broadcast, nil
+// }
