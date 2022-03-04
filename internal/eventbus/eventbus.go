@@ -2,6 +2,7 @@ package eventbus
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -17,14 +18,19 @@ func (c Channel) buildChannel(userID string) string {
 	return string(c) + ":" + userID
 }
 
+type ServerMessage struct {
+	UserID string `json:"user_id"`
+	Rpc    Rpc    `json:"rpc"`
+}
+
 type Publisher interface {
 	PublishClient(userID string, rpc Rpc) error
-	PublishServer(userID string, rpc Rpc) error
+	PublishServer(message ServerMessage) error
 }
 
 type Subscriber interface {
 	SubscribeClient(userID string) (*Subscription, error)
-	SubscribeServer(userID string) (*Subscription, error)
+	SubscribeServer() (*Subscription, error)
 }
 
 type Subscription struct {
@@ -49,33 +55,37 @@ func RedisPubSub(rdb *redis.Client) *Eventbus {
 }
 
 func (e *Eventbus) PublishClient(userID string, rpc Rpc) error {
-	return e.publish(userID, rpc, ClientMessages)
-}
-
-func (e *Eventbus) PublishServer(userID string, rpc Rpc) error {
-	return e.publish(userID, rpc, ServerMessages)
-}
-
-func (e *Eventbus) SubscribeClient(userID string) (*Subscription, error) {
-	return e.subscribe(userID, ClientMessages)
-}
-
-func (e *Eventbus) SubscribeServer(userID string) (*Subscription, error) {
-	return e.subscribe(userID, ServerMessages)
-}
-
-func (e *Eventbus) publish(userID string, rpc Rpc, ch Channel) error {
 	msg, err := rpc.ToJSON()
 	if err != nil {
 		return err
 	}
-	return e.rdb.Publish(context.Background(), ch.buildChannel(userID), msg).Err()
+	return e.rdb.Publish(context.Background(), ClientMessages.buildChannel(userID), msg).Err()
 }
 
-func (e *Eventbus) subscribe(userID string, ch Channel) (*Subscription, error) {
+func (e *Eventbus) PublishServer(message ServerMessage) error {
+	msg, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+	return e.rdb.Publish(context.Background(), string(ServerMessages), msg).Err()
+}
+
+func (e *Eventbus) SubscribeClient(userID string) (*Subscription, error) {
 	ctx := context.Background()
 	// Subscribe user to messages
-	pubsub := e.rdb.Subscribe(ctx, ch.buildChannel(userID))
+	pubsub := e.rdb.Subscribe(ctx, ClientMessages.buildChannel(userID))
+	// Wait until subscription is created
+	if _, err := pubsub.Receive(ctx); err != nil {
+		return nil, err
+	}
+
+	return &Subscription{pubsub: pubsub}, nil
+}
+
+func (e *Eventbus) SubscribeServer() (*Subscription, error) {
+	ctx := context.Background()
+	// Subscribe user to messages
+	pubsub := e.rdb.Subscribe(ctx, string(ServerMessages))
 	// Wait until subscription is created
 	if _, err := pubsub.Receive(ctx); err != nil {
 		return nil, err

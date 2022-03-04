@@ -16,6 +16,7 @@ import (
 	"github.com/isqad/livelook-sfu/internal/admin"
 	"github.com/isqad/livelook-sfu/internal/api"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
+	"github.com/isqad/livelook-sfu/internal/sfu"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
@@ -66,6 +67,16 @@ func main() {
 			EventsSubscriber: redisPubSub,
 		},
 	)
+
+	commutator, err := sfu.NewCommutator(sfu.Options{
+		DB:               db,
+		EventsPublisher:  redisPubSub,
+		EventsSubscriber: redisPubSub,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	commutator.Start()
 
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)

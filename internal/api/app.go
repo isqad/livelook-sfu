@@ -10,7 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
-	"github.com/isqad/livelook-sfu/internal/sfu"
 	"github.com/isqad/melody"
 	"github.com/jmoiron/sqlx"
 	"github.com/spf13/viper"
@@ -32,7 +31,7 @@ type AppOptions struct {
 	websocket      *melody.Melody
 	authMiddleware FirebaseAuthHandler
 
-	sessionsStorage sfu.SessionsDBStorer
+	sessionsStorage core.SessionsDBStorer
 }
 
 // App is application for API
@@ -52,7 +51,7 @@ func NewApp(options AppOptions) *App {
 
 	options.authMiddleware = firebaseAuth.Middleware()
 
-	options.sessionsStorage = sfu.NewSessionsRepository(options.DB)
+	options.sessionsStorage = core.NewSessionsRepository(options.DB)
 
 	app := &App{
 		options,
@@ -64,7 +63,7 @@ func NewApp(options AppOptions) *App {
 func (app *App) Router() http.Handler {
 	app.router.With(app.authMiddleware).Route("/", func(r chi.Router) {
 		r.Get("/ws", WebsocketsHandler(app.EventsSubscriber, app.DB, app.websocket))
-		r.Post("/session", SessionCreateHandler(app.sessionsStorage, app.EventsPublisher, app.DB))
+		r.Post("/session", SessionCreateHandler(app.EventsPublisher, app.DB))
 
 		r.Post("/users", func(w http.ResponseWriter, r *http.Request) {
 			user := core.NewUser()
@@ -159,7 +158,7 @@ func (app *App) Router() http.Handler {
 	})
 
 	app.websocket.HandleConnect(ConnectHandler)
-	app.websocket.HandleDisconnect(DisconnectHandler)
+	app.websocket.HandleDisconnect(DisconnectHandler(app.EventsPublisher))
 	app.websocket.HandleMessage(HandleMessage(app.EventsPublisher))
 
 	return app.router
