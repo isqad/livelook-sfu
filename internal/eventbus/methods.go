@@ -16,6 +16,7 @@ type Method string
 const (
 	ICECandidateMethod  Method = "iceCandidate"
 	SDPAnswerMethod     Method = "answer"
+	RenegotiationMethod Method = "renogotiation"
 	CreateSessionMethod Method = "create_session"
 	CloseSessionMethod  Method = "close_session"
 )
@@ -77,6 +78,13 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 		return NewCreateSessionRpc(s), nil
 	case CloseSessionMethod:
 		return NewCloseSessionRpc(), nil
+	case RenegotiationMethod:
+		sdp := &webrtc.SessionDescription{}
+		if err := json.Unmarshal(params, sdp); err != nil {
+			return nil, err
+		}
+
+		return NewRenegotiationRpc(sdp), nil
 	default:
 		return nil, ErrUnknownRpcType
 	}
@@ -173,5 +181,29 @@ func (r ICECandidateRpc) GetMethod() Method {
 }
 
 func (r ICECandidateRpc) ToJSON() ([]byte, error) {
+	return json.Marshal(r)
+}
+
+type RenegotiationRpc struct {
+	SDPRpc
+}
+
+func NewRenegotiationRpc(sdp *webrtc.SessionDescription) *RenegotiationRpc {
+	return &RenegotiationRpc{
+		SDPRpc: SDPRpc{
+			jsonRpcHead: jsonRpcHead{
+				Version: jsonRpcVersion,
+				Method:  ICECandidateMethod,
+			},
+			Params: sdp,
+		},
+	}
+}
+
+func (r RenegotiationRpc) GetMethod() Method {
+	return r.Method
+}
+
+func (r RenegotiationRpc) ToJSON() ([]byte, error) {
 	return json.Marshal(r)
 }

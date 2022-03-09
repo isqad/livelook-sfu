@@ -91,6 +91,16 @@ func (c *Commutator) Start() {
 				if err := c.closeSessionPeer(userID); err != nil {
 					log.Printf("commutator: error close session: %v", err)
 				}
+			case eventbus.RenegotiationMethod:
+				rpc, ok := rpc.(*eventbus.RenegotiationRpc)
+				if !ok {
+					log.Printf("commutator: error: %v", errConvertSession)
+					continue
+				}
+
+				if err := c.renogotiation(userID, rpc.Params); err != nil {
+					log.Printf("commutator: renegotiation error: %v", err)
+				}
 			default:
 				log.Printf("commutator: error: %v, %v", errors.New("undefined method"), rpc.GetMethod())
 			}
@@ -111,7 +121,7 @@ func (c *Commutator) createOrUpdateSession(userID string, sessionData *core.Sess
 
 	peer.session = session
 
-	if err := peer.serRemoteDescription(*session.Sdp); err != nil {
+	if err := peer.setRemoteDescription(*session.Sdp); err != nil {
 		return err
 	}
 
@@ -136,6 +146,26 @@ func (c *Commutator) addICECandidate(userID string, candidate *webrtc.ICECandida
 	return peer.addICECandidate(candidate)
 }
 
+func (c *Commutator) renogotiation(userID string, sdp *webrtc.SessionDescription) error {
+	log.Println("renegotiation")
+
+	peer, err := c.findOrInitPeer(userID)
+	if err != nil {
+		return err
+	}
+
+	if err := peer.setRemoteDescription(*sdp); err != nil {
+		return err
+	}
+
+	answerRpc, err := peer.createAnswer()
+	if err != nil {
+		return err
+	}
+
+	return c.EventsPublisher.PublishClient(userID, answerRpc)
+}
+
 func (c *Commutator) findOrInitPeer(userID string) (*peer, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -145,6 +175,7 @@ func (c *Commutator) findOrInitPeer(userID string) (*peer, error) {
 	if !ok {
 		p = &peer{
 			iceCandidates: []*webrtc.ICECandidateInit{},
+			remotePeers:   []*peer{},
 		}
 		c.peers[userID] = p
 	}
