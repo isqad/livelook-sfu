@@ -101,6 +101,14 @@ func (c *Commutator) Start() {
 				if err := c.renogotiation(userID, rpc.Params); err != nil {
 					log.Printf("commutator: renegotiation error: %v", err)
 				}
+			case eventbus.StartStreamMethod:
+				if err := c.allowStreaming(userID); err != nil {
+					log.Printf("commutator: error allowing streaming: %v", err)
+				}
+			case eventbus.StopStreamMethod:
+				if err := c.disallowStreaming(userID); err != nil {
+					log.Printf("commutator: error disallowing streaming: %v", err)
+				}
 			default:
 				log.Printf("commutator: error: %v, %v", errUndefinedMethod, rpc.GetMethod())
 			}
@@ -145,6 +153,28 @@ func (c *Commutator) addICECandidate(userID string, candidate *webrtc.ICECandida
 	return peer.addICECandidate(candidate)
 }
 
+func (c *Commutator) allowStreaming(userID string) error {
+	peer, err := c.findOrInitPeer(userID)
+	if err != nil {
+		return err
+	}
+
+	peer.streamingAllowed = true
+
+	return nil
+}
+
+func (c *Commutator) disallowStreaming(userID string) error {
+	peer, err := c.findOrInitPeer(userID)
+	if err != nil {
+		return err
+	}
+
+	peer.streamingAllowed = false
+
+	return nil
+}
+
 func (c *Commutator) renogotiation(userID string, sdp *webrtc.SessionDescription) error {
 	log.Println("renegotiation")
 
@@ -173,6 +203,7 @@ func (c *Commutator) findOrInitPeer(userID string) (*peer, error) {
 	p, ok := c.peers[userID]
 	if !ok {
 		p = &peer{
+			streamingAllowed: false,
 			iceCandidates:    []*webrtc.ICECandidateInit{},
 			remotePeers:      []*peer{},
 			closeChan:        make(chan struct{}),

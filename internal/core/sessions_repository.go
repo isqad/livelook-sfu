@@ -111,7 +111,8 @@ func (r *SessionsRepository) SetOffline(userID string) error {
 }
 
 func (r *SessionsRepository) Start(session *Session) (*Session, error) {
-	*session.MediaType = VideoSession
+	mediaType := VideoSession
+	session.MediaType = &mediaType
 	session.State = SingleBroadcast
 
 	_, err := r.db.Exec(

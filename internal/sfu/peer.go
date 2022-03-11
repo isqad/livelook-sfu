@@ -21,7 +21,8 @@ var (
 )
 
 type peer struct {
-	userID string
+	userID           string
+	streamingAllowed bool
 
 	connection *webrtc.PeerConnection
 
@@ -145,7 +146,7 @@ func (p *peer) listenAndAccept() {
 			log.Printf("closing peer %s...\n", p.userID)
 
 			// p.stopTracks <- struct{}{}
-
+			p.streamingAllowed = false
 			p.clearCandidates()
 			p.clearRemotePeers()
 			if p.connection == nil {
@@ -195,6 +196,8 @@ func (p *peer) onICECandidate(eventsPublisher eventbus.Publisher) func(*webrtc.I
 }
 
 func (p *peer) onTrack(remoteTrack *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+	log.Printf("onTrack: %s", remoteTrack.Kind().String())
+
 	if remoteTrack.Kind() == webrtc.RTPCodecTypeVideo {
 		if err := p.createLocalVideoTrackForwarding(remoteTrack); err != nil {
 			fmt.Printf("onTrack create localVideoTrack error: %v", err)
@@ -217,6 +220,11 @@ func (p *peer) createLocalVideoTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 	go func() {
 		ticker := time.NewTicker(rtcpPLIInterval)
 		for range ticker.C {
+			// TODO: stop the goroutine
+			if !p.streamingAllowed {
+				continue
+			}
+
 			if err := p.connection.WriteRTCP(
 				[]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remoteTrack.SSRC())}},
 			); err != nil {
@@ -234,7 +242,7 @@ func (p *peer) createLocalVideoTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 
 	p.localVideoTrack = localVideoTrack
 
-	return forwardPacketsToLocalTrack(remoteTrack, localVideoTrack)
+	return p.forwardPacketsToLocalTrack(remoteTrack, localVideoTrack)
 }
 
 func (p *peer) createLocalAudioTrackForwarding(remoteTrack *webrtc.TrackRemote) error {
@@ -247,16 +255,21 @@ func (p *peer) createLocalAudioTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 
 	p.localAudioTrack = localAudioTrack
 
-	return forwardPacketsToLocalTrack(remoteTrack, localAudioTrack)
+	return p.forwardPacketsToLocalTrack(remoteTrack, localAudioTrack)
 }
 
-func forwardPacketsToLocalTrack(remoteTrack *webrtc.TrackRemote, localTrack *webrtc.TrackLocalStaticRTP) error {
+func (p *peer) forwardPacketsToLocalTrack(remoteTrack *webrtc.TrackRemote, localTrack *webrtc.TrackLocalStaticRTP) error {
 	log.Printf("forwardPacketsToLocalTrack: %s", remoteTrack.Kind().String())
 
 	defer func() { log.Printf("forwardPacketsToLocalTrack %s has been closed\n", remoteTrack.Kind().String()) }()
 
 	rtpBuf := make([]byte, 1400)
 	for {
+		if !p.streamingAllowed {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
 		i, _, err := remoteTrack.Read(rtpBuf)
 		if err != nil {
 			return err
