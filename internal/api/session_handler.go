@@ -51,25 +51,3 @@ func SessionCreateHandler(
 		w.WriteHeader(http.StatusAccepted)
 	}
 }
-
-// func initPeerConnection(session *core.Session, eventsPublisher eventbus.Publisher, w http.ResponseWriter) error {
-// 	err := session.EstablishPeerConnection(eventsPublisher)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	answer, err := session.CreateWebrtcAnswer()
-// 	if err != nil {
-// 		return errInitPeerConnection(session, err)
-// 	}
-
-// 	if err := eventsPublisher.PublishClient(session.UserID, answer); err != nil {
-// 		return errInitPeerConnection(session, err)
-// 	}
-
-// 	return nil
-// }
-
-// func errInitPeerConnection(session *sfu.Session, err error) error {
-// 	return fmt.Errorf("%v, close session pc: %v", err, session.Close())
-// }

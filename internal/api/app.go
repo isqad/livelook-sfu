@@ -43,7 +43,7 @@ type App struct {
 func NewApp(options AppOptions) *App {
 	options.router = chi.NewRouter()
 	options.websocket = melody.New()
-	options.websocket.Config.MaxMessageSize = 1024
+	options.websocket.Config.MaxMessageSize = 200 * 1024
 
 	firebaseAuth := NewFirebaseAuth()
 	firebaseAuth.Addr = viper.GetString("firebase_auth_service.addr")
@@ -64,6 +64,8 @@ func (app *App) Router() http.Handler {
 	app.router.With(app.authMiddleware).Route("/", func(r chi.Router) {
 		r.Get("/ws", WebsocketsHandler(app.EventsSubscriber, app.DB, app.websocket))
 		r.Post("/session", SessionCreateHandler(app.EventsPublisher, app.DB))
+		r.Post("/stream", StreamCreateHandler(app.EventsPublisher, app.DB))
+		r.Delete("/stream", StreamDeleteHandler(app.EventsPublisher, app.DB))
 
 		r.Post("/users", func(w http.ResponseWriter, r *http.Request) {
 			user := core.NewUser()
@@ -160,6 +162,9 @@ func (app *App) Router() http.Handler {
 	app.websocket.HandleConnect(ConnectHandler)
 	app.websocket.HandleDisconnect(DisconnectHandler(app.EventsPublisher))
 	app.websocket.HandleMessage(HandleMessage(app.EventsPublisher))
+	app.websocket.HandleError(func(s *melody.Session, e error) {
+		log.Printf("error in websocket session: %v", e)
+	})
 
 	return app.router
 }

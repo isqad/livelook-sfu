@@ -7,7 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
@@ -22,7 +21,8 @@ var (
 )
 
 type peer struct {
-	session    *core.Session
+	userID string
+
 	connection *webrtc.PeerConnection
 
 	iceCandidates []*webrtc.ICECandidateInit
@@ -31,6 +31,12 @@ type peer struct {
 	localAudioTrack *webrtc.TrackLocalStaticRTP
 
 	remotePeers []*peer
+
+	closeChan        chan struct{}
+	closed           chan struct{}
+	stopTracks       chan struct{}
+	stopped          chan struct{}
+	stopParentTracks chan struct{}
 }
 
 func (p *peer) establishPeerConnection(eventsPublisher eventbus.Publisher) error {
@@ -132,14 +138,43 @@ func (p *peer) createAnswer() (*eventbus.SDPRpc, error) {
 	return rpc, nil
 }
 
-func (p *peer) listenAndAccept() {}
+func (p *peer) listenAndAccept() {
+	for {
+		select {
+		case <-p.closeChan:
+			log.Printf("closing peer %s...\n", p.userID)
 
-func (p *peer) close() error {
-	if p.connection == nil {
-		return errConnectionNotInitialized
+			// p.stopTracks <- struct{}{}
+
+			p.clearCandidates()
+			p.clearRemotePeers()
+			if p.connection == nil {
+				log.Printf("%v", errConnectionNotInitialized)
+			}
+			if err := p.connection.Close(); err != nil {
+				log.Printf("close peer error %v\n", err)
+			}
+			//<-p.stopped
+
+			p.closed <- struct{}{}
+			return
+		case <-p.stopParentTracks:
+			log.Printf("accepted stopParentTracks signal for peer %s...", p.userID)
+		}
 	}
+}
 
-	return p.connection.Close()
+func (p *peer) clearRemotePeers() {
+	for _, remotePeer := range p.remotePeers {
+		remotePeer.stopParentTracks <- struct{}{}
+	}
+	p.remotePeers = []*peer{}
+}
+
+func (p *peer) close() <-chan struct{} {
+	p.closeChan <- struct{}{}
+
+	return p.closed
 }
 
 func (p *peer) onICECandidate(eventsPublisher eventbus.Publisher) func(*webrtc.ICECandidate) {
@@ -152,7 +187,7 @@ func (p *peer) onICECandidate(eventsPublisher eventbus.Publisher) func(*webrtc.I
 		candidateInit := candidate.ToJSON()
 		rpc := eventbus.NewICECandidateRpc(&candidateInit)
 
-		if err := eventsPublisher.PublishClient(p.session.UserID, rpc); err != nil {
+		if err := eventsPublisher.PublishClient(p.userID, rpc); err != nil {
 			log.Printf("onICECandidate: error %v", err)
 			return
 		}
@@ -185,8 +220,8 @@ func (p *peer) createLocalVideoTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 			if err := p.connection.WriteRTCP(
 				[]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remoteTrack.SSRC())}},
 			); err != nil {
-				fmt.Printf("onTrack send PLI error: %v", err)
-				// TODO: return if closed pipe
+				fmt.Printf("onTrack send PLI error: %v\n", err)
+				return
 			}
 		}
 	}()
@@ -218,16 +253,13 @@ func (p *peer) createLocalAudioTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 func forwardPacketsToLocalTrack(remoteTrack *webrtc.TrackRemote, localTrack *webrtc.TrackLocalStaticRTP) error {
 	log.Printf("forwardPacketsToLocalTrack: %s", remoteTrack.Kind().String())
 
-	defer func() { log.Printf("forwardPacketsToLocalTrack %s has been closed", remoteTrack.Kind().String()) }()
+	defer func() { log.Printf("forwardPacketsToLocalTrack %s has been closed\n", remoteTrack.Kind().String()) }()
 
 	rtpBuf := make([]byte, 1400)
 	for {
 		i, _, err := remoteTrack.Read(rtpBuf)
 		if err != nil {
 			return err
-		}
-		if remoteTrack.Kind() == webrtc.RTPCodecTypeAudio {
-			log.Printf("read %d bytes from from remoteTrack for %s", i, remoteTrack.Kind().String())
 		}
 
 		// ErrClosedPipe means we don't have any subscribers, this is ok if no peers have connected yet

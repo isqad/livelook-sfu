@@ -19,6 +19,8 @@ const (
 	RenegotiationMethod Method = "renogotiation"
 	CreateSessionMethod Method = "create_session"
 	CloseSessionMethod  Method = "close_session"
+	StartStreamMethod   Method = "start_stream"
+	StopStreamMethod    Method = "stop_stream"
 )
 
 type Rpc interface {
@@ -85,6 +87,10 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 		}
 
 		return NewRenegotiationRpc(sdp), nil
+	case StartStreamMethod:
+		return NewStartStreamRpc(), nil
+	case StopStreamMethod:
+		return NewStopStreamRpc(), nil
 	default:
 		return nil, ErrUnknownRpcType
 	}
@@ -205,5 +211,51 @@ func (r RenegotiationRpc) GetMethod() Method {
 }
 
 func (r RenegotiationRpc) ToJSON() ([]byte, error) {
+	return json.Marshal(r)
+}
+
+type StartStreamRpc struct {
+	jsonRpcHead
+	Params interface{} `json:"params"`
+}
+
+func NewStartStreamRpc() *StartStreamRpc {
+	return &StartStreamRpc{
+		jsonRpcHead: jsonRpcHead{
+			Version: jsonRpcVersion,
+			Method:  StartStreamMethod,
+		},
+		Params: nil,
+	}
+}
+
+func (r StartStreamRpc) GetMethod() Method {
+	return r.Method
+}
+
+func (r StartStreamRpc) ToJSON() ([]byte, error) {
+	return json.Marshal(r)
+}
+
+type StopStreamRpc struct {
+	jsonRpcHead
+	Params interface{} `json:"params"`
+}
+
+func NewStopStreamRpc() *StopStreamRpc {
+	return &StopStreamRpc{
+		jsonRpcHead: jsonRpcHead{
+			Version: jsonRpcVersion,
+			Method:  StopStreamMethod,
+		},
+		Params: nil,
+	}
+}
+
+func (r StopStreamRpc) GetMethod() Method {
+	return r.Method
+}
+
+func (r StopStreamRpc) ToJSON() ([]byte, error) {
 	return json.Marshal(r)
 }

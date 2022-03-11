@@ -17,6 +17,7 @@ var (
 	errConvertIceCandidate = errors.New("can't convert to ice candidate")
 	errConvertSession      = errors.New("can't convert to session")
 	errPeerNotFound        = errors.New("can't find peer")
+	errUndefinedMethod     = errors.New("undefined method")
 )
 
 // Options is options of the sfu
@@ -68,7 +69,6 @@ func (c *Commutator) Start() {
 			switch rpc.GetMethod() {
 			case eventbus.ICECandidateMethod:
 				rpc, ok := rpc.(*eventbus.ICECandidateRpc)
-				log.Printf("%v", rpc)
 				if !ok {
 					log.Printf("commutator: error: %v", errConvertIceCandidate)
 					continue
@@ -102,7 +102,7 @@ func (c *Commutator) Start() {
 					log.Printf("commutator: renegotiation error: %v", err)
 				}
 			default:
-				log.Printf("commutator: error: %v, %v", errors.New("undefined method"), rpc.GetMethod())
+				log.Printf("commutator: error: %v, %v", errUndefinedMethod, rpc.GetMethod())
 			}
 		}
 	}()
@@ -114,12 +114,11 @@ func (c *Commutator) createOrUpdateSession(userID string, sessionData *core.Sess
 		return err
 	}
 
+	// TODO: move to API
 	session, err := c.sessionStorage.Save(sessionData)
 	if err != nil {
 		return err
 	}
-
-	peer.session = session
 
 	if err := peer.setRemoteDescription(*session.Sdp); err != nil {
 		return err
@@ -174,9 +173,17 @@ func (c *Commutator) findOrInitPeer(userID string) (*peer, error) {
 	p, ok := c.peers[userID]
 	if !ok {
 		p = &peer{
-			iceCandidates: []*webrtc.ICECandidateInit{},
-			remotePeers:   []*peer{},
+			iceCandidates:    []*webrtc.ICECandidateInit{},
+			remotePeers:      []*peer{},
+			closeChan:        make(chan struct{}),
+			closed:           make(chan struct{}),
+			stopTracks:       make(chan struct{}),
+			stopped:          make(chan struct{}),
+			stopParentTracks: make(chan struct{}, 1),
+			userID:           userID,
 		}
+		go p.listenAndAccept()
+
 		c.peers[userID] = p
 	}
 
@@ -200,11 +207,14 @@ func (c *Commutator) closeSessionPeer(userID string) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if err := peer.close(); err != nil {
-		return err
-	}
+	// Wait until closed
+	<-peer.close()
 
 	delete(c.peers, userID)
+
+	if err := c.sessionStorage.SetOffline(userID); err != nil {
+		return err
+	}
 
 	log.Printf("commutator: session closed for user: %s", userID)
 

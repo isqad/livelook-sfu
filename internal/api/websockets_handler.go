@@ -48,8 +48,6 @@ func DisconnectHandler(eventsPublisher eventbus.Publisher) func(session *melody.
 	return func(session *melody.Session) {
 		defer closeWsSession(session)
 
-		log.Println("close session of user")
-
 		userID, err := getUserIDFromSession(session)
 		if err != nil {
 			log.Printf("extract subscription error: %v", err)
@@ -66,8 +64,7 @@ func DisconnectHandler(eventsPublisher eventbus.Publisher) func(session *melody.
 			log.Printf("extract subscription error: %v", err)
 			return
 		}
-		err = subscription.Close()
-		if err != nil {
+		if err := subscription.Close(); err != nil {
 			log.Printf("close subscription error: %v", err)
 		}
 	}
@@ -77,7 +74,6 @@ func ConnectHandler(session *melody.Session) {
 	subscription, err := getUserSubscription(session)
 	if err != nil {
 		log.Printf("extract subscription error: %v", err)
-		log.Printf("close session: %v", session.Close())
 		return
 	}
 
@@ -85,8 +81,11 @@ func ConnectHandler(session *melody.Session) {
 		ch := subscription.Channel()
 
 		for msg := range ch {
-			log.Printf("send message to websockets: %s", msg.Payload)
-			session.Write([]byte(msg.Payload))
+			if err := session.Write([]byte(msg.Payload)); err != nil {
+				// there's only session closed error can be
+				log.Printf("ws write error: %v", err)
+				return
+			}
 		}
 	}()
 }
@@ -137,5 +136,7 @@ func getUserIDFromSession(s *melody.Session) (string, error) {
 }
 
 func closeWsSession(session *melody.Session) {
-	log.Printf("close session: %v", session.Close())
+	if !session.IsClosed() {
+		log.Printf("close session: %v", session.Close())
+	}
 }
