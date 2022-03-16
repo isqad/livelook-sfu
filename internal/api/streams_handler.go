@@ -78,6 +78,26 @@ func StreamDeleteHandler(
 		rpc := eventbus.NewStopStreamRpc()
 		if err := eventsPublisher.PublishServer(eventbus.ServerMessage{UserID: user.ID, Rpc: rpc}); err != nil {
 			log.Printf("publish server rpc error: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}
+}
+
+func StreamListHandler(db *sqlx.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		streamRepo := core.NewStreamsRepository(db)
+
+		sessions, err := streamRepo.GetAll(1, 50)
+		if err != nil {
+			log.Printf("can't get user ID from request context: %v", err)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		if err := json.NewEncoder(w).Encode(sessions); err != nil {
+			log.Printf("publish server rpc error: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 	}
 }

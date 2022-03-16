@@ -145,6 +145,8 @@ func (app *App) Router() http.Handler {
 		r.Post("/stream", StreamCreateHandler(app.EventsPublisher, app.DB))
 		r.Delete("/stream", StreamDeleteHandler(app.EventsPublisher, app.DB))
 
+		r.Get("/streams", StreamListHandler(app.DB))
+
 		r.Post("/users", func(w http.ResponseWriter, r *http.Request) {
 			user := core.NewUser()
 			err := json.NewDecoder(r.Body).Decode(user)

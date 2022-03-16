@@ -47,7 +47,10 @@ func (r *SessionsRepository) GetAll(page int, perPage int) ([]*Session, error) {
 
 	s := []*Session{}
 	err := r.db.Select(&s,
-		`SELECT id, title, user_id FROM sessions ORDER BY updated_at DESC LIMIT $1 OFFSET $2`,
+		`SELECT id, title, user_id
+			FROM sessions
+			WHERE state = 'broadcast_single' AND is_online
+			ORDER BY updated_at DESC LIMIT $1 OFFSET $2`,
 		perPage, (page-1)*perPage,
 	)
 	if err != nil {

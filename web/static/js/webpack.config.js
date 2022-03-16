@@ -3,6 +3,7 @@ const path = require("path");
 module.exports = {
   entry: {
     home: "./src/home.js",
+    admin: "./src/admin.js",
     broadcastShow: "./src/broadcast_show.js",
   },
   output: {
