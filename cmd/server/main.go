@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/spf13/viper"
 
-	"github.com/isqad/livelook-sfu/internal/admin"
 	"github.com/isqad/livelook-sfu/internal/api"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/livelook-sfu/internal/sfu"
@@ -58,8 +57,8 @@ func main() {
 		Addr: fmt.Sprintf("%s:%s", viper.GetString("redis.host"), viper.GetString("redis.port")),
 		DB:   0,
 	})
-
 	redisPubSub := eventbus.RedisPubSub(rdb)
+
 	apiApp := api.NewApp(
 		api.AppOptions{
 			DB:               db,
@@ -83,16 +82,8 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// Mount admin
-	r.Mount(
-		"/admin",
-		admin.NewApp(
-			db,
-			fmt.Sprintf("https://%s:%s/admin", viper.GetString("app.hostname"), viper.GetString("app.port")),
-		).Router(),
-	)
 	// Mount API
-	r.Mount("/api/v1", apiApp.Router())
+	r.Mount("/", apiApp.Router())
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		tmpl, err := template.New("app").ParseFiles(

@@ -5,16 +5,29 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-chi/chi/v5"
+	"github.com/isqad/livelook-sfu/internal/core"
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFirebaseAuthMiddleware(t *testing.T) {
+func TestAuthMiddleware(t *testing.T) {
+	db, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+
+	sqlxDb := sqlx.NewDb(db, "sqlmock")
+	defer sqlxDb.Close()
+
+	repo := core.NewUserRepository(sqlxDb)
+
 	t.Run("default middleware with given AuthFailFunc", func(t *testing.T) {
 
 		r := chi.NewRouter()
 
-		firebaseAuth := NewFirebaseAuth()
+		firebaseAuth := NewFirebaseAuth(repo)
 		firebaseAuth.AuthFailFunc = func(w http.ResponseWriter, r *http.Request, err error) {
 			w.WriteHeader(http.StatusBadRequest)
 		}
@@ -43,7 +56,7 @@ func TestFirebaseAuthMiddleware(t *testing.T) {
 
 		r := chi.NewRouter()
 
-		firebaseAuth := NewFirebaseAuth()
+		firebaseAuth := NewFirebaseAuth(repo)
 
 		r.Use(firebaseAuth.Middleware())
 
@@ -68,7 +81,7 @@ func TestFirebaseAuthMiddleware(t *testing.T) {
 	t.Run("stub handler", func(t *testing.T) {
 		r := chi.NewRouter()
 
-		firebaseAuth := NewFirebaseAuth()
+		firebaseAuth := NewFirebaseAuth(repo)
 		firebaseAuth.StubHandler = func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusTeapot)

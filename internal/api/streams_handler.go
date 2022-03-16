@@ -15,7 +15,7 @@ func StreamCreateHandler(
 	db *sqlx.DB,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, err := userFromRequest(db, r)
+		user, err := userFromRequest(r)
 		if err != nil {
 			log.Printf("can't get user ID from request context: %v", err)
 			w.WriteHeader(http.StatusNotFound)
@@ -51,7 +51,7 @@ func StreamDeleteHandler(
 	db *sqlx.DB,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, err := userFromRequest(db, r)
+		user, err := userFromRequest(r)
 		if err != nil {
 			log.Printf("can't get user ID from request context: %v", err)
 			w.WriteHeader(http.StatusNotFound)

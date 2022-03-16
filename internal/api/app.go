@@ -1,13 +1,14 @@
 package api
 
 import (
-	"database/sql"
 	"encoding/json"
-	"errors"
+	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/sessions"
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/melody"
@@ -29,9 +30,12 @@ type AppOptions struct {
 
 	router         *chi.Mux
 	websocket      *melody.Melody
-	authMiddleware FirebaseAuthHandler
+	authMiddleware AuthHandler
 
 	sessionsStorage core.SessionsDBStorer
+	userRepository  core.UserStorer
+	cookieStore     *sessions.CookieStore
+	rootURL         string
 }
 
 // App is application for API
@@ -43,15 +47,22 @@ type App struct {
 func NewApp(options AppOptions) *App {
 	options.router = chi.NewRouter()
 	options.websocket = melody.New()
-	options.websocket.Config.MaxMessageSize = 200 * 1024
+	options.websocket.Config.MaxMessageSize = 10 * 1024
 
-	firebaseAuth := NewFirebaseAuth()
+	userRepo := core.NewUserRepository(options.DB)
+	cookieStore := sessions.NewCookieStore([]byte(viper.GetString("app.secret_key")))
+
+	options.cookieStore = cookieStore
+	options.userRepository = userRepo
+
+	firebaseAuth := NewFirebaseAuth(userRepo)
 	firebaseAuth.Addr = viper.GetString("firebase_auth_service.addr")
 	firebaseAuth.AuthFailFunc = authFailedFunc
+	firebaseAuth.cookieStore = cookieStore
 
 	options.authMiddleware = firebaseAuth.Middleware()
-
 	options.sessionsStorage = core.NewSessionsRepository(options.DB)
+	options.rootURL = fmt.Sprintf("https://%s:%s", viper.GetString("app.hostname"), viper.GetString("app.port"))
 
 	app := &App{
 		options,
@@ -61,9 +72,76 @@ func NewApp(options AppOptions) *App {
 
 // Router is function for construct http router
 func (app *App) Router() http.Handler {
-	app.router.With(app.authMiddleware).Route("/", func(r chi.Router) {
-		r.Get("/ws", WebsocketsHandler(app.EventsSubscriber, app.DB, app.websocket))
-		r.Post("/session", SessionCreateHandler(app.EventsPublisher, app.DB))
+	app.router.Get("/admin/login", func(w http.ResponseWriter, r *http.Request) {
+		tmpl, err := template.New("app").ParseFiles(
+			"web/templates/admin/layout.html",
+			"web/templates/admin/login/index.html",
+		)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		tmpl.ExecuteTemplate(w, "layout.html", nil)
+	})
+	app.router.Post("/admin/login", func(w http.ResponseWriter, r *http.Request) {
+		email := r.FormValue("email")
+		password := r.FormValue("password")
+
+		user, err := app.userRepository.AuthAdminUser(email, password)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if user == nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			tmpl, err := template.New("app").ParseFiles(
+				"web/templates/admin/layout.html",
+				"web/templates/admin/login/index.html",
+			)
+			if err != nil {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+
+			tmpl.ExecuteTemplate(w, "layout.html", nil)
+			return
+		}
+
+		session, _ := app.cookieStore.Get(r, core.AdminSessionNameKey)
+		session.Values["id"] = user.ID
+		if err := session.Save(r, w); err != nil {
+			log.Printf("error: %v", err)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		// Successfull, redirect to home page
+		w.Header().Set("Location", app.rootURL+"/admin")
+		w.WriteHeader(http.StatusFound)
+	})
+
+	app.router.Delete("/admin/login", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", app.rootURL+"/login")
+		w.WriteHeader(http.StatusFound)
+	})
+	app.router.With(app.authMiddleware).Route("/admin", func(r chi.Router) {
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			tmpl, err := template.New("app").ParseFiles(
+				"web/templates/admin/layout.html",
+				"web/templates/admin/root/index.html",
+			)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			tmpl.ExecuteTemplate(w, "layout.html", nil)
+		})
+	})
+
+	app.router.With(app.authMiddleware).Route("/api/v1", func(r chi.Router) {
+		r.Get("/ws", WebsocketsHandler(app.EventsSubscriber, app.websocket))
+		r.Post("/session", SessionCreateHandler(app.EventsPublisher))
 		r.Post("/stream", StreamCreateHandler(app.EventsPublisher, app.DB))
 		r.Delete("/stream", StreamDeleteHandler(app.EventsPublisher, app.DB))
 
@@ -90,13 +168,13 @@ func (app *App) Router() http.Handler {
 
 		// API для добавления аваторки пользователя
 		r.Post("/profile/images", func(w http.ResponseWriter, request *http.Request) {
-			userID, err := extractUserID(request)
+			user, err := userFromRequest(request)
 			if err != nil {
 				log.Println("can't get user ID from request context")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			image := core.NewUserProfileImage(userID, viper.GetString("app.upload_root"))
+			image := core.NewUserProfileImage(user.ID, viper.GetString("app.upload_root"))
 			imageStorer := core.NewUserProfileImageDbStorer(app.DB)
 			if err := image.UploadHandle(request, imageStorer); err != nil {
 				log.Printf("can't upload file: %+v", err)
@@ -131,23 +209,10 @@ func (app *App) Router() http.Handler {
 		// API для получения информации о пользователе
 		// GET /api/v1/current_user
 		r.Get("/current_user", func(w http.ResponseWriter, request *http.Request) {
-			userID, err := extractUserID(request)
+			user, err := userFromRequest(request)
 			if err != nil {
 				log.Printf("can't get user ID from request context: %v", err)
 				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			user, err := core.FindUserByUID(app.DB, userID)
-			if err != nil {
-				if err == sql.ErrNoRows {
-					log.Println("can't find user")
-					w.WriteHeader(http.StatusNotFound)
-				} else {
-					log.Printf("can't find user: %v", err)
-					w.WriteHeader(http.StatusBadRequest)
-				}
-
 				return
 			}
 
@@ -171,29 +236,4 @@ func (app *App) Router() http.Handler {
 
 func authFailedFunc(w http.ResponseWriter, r *http.Request, err error) {
 	w.WriteHeader(http.StatusUnauthorized)
-}
-
-// userFromRequest извлекает User из контекста запроса
-func userFromRequest(db *sqlx.DB, r *http.Request) (*core.User, error) {
-	uid, err := extractUserID(r)
-	if err != nil {
-		return nil, err
-	}
-
-	user, err := core.FindUserByUID(db, uid)
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
-}
-
-// extractUserID извлекает userID из контекста запроса
-func extractUserID(r *http.Request) (string, error) {
-	userID, ok := r.Context().Value(UserIDContextKey).(string)
-	if !ok {
-		return "", errors.New("can't get user ID from request context")
-	}
-
-	return userID, nil
 }

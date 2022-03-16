@@ -7,12 +7,19 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+const (
+	AdminSessionNameKey = "_livelook_admin_session"
+)
+
 // User is central subject of the application
 type User struct {
-	ID        string    `json:"id,omitempty" db:"id"`
-	UID       string    `json:"uid" db:"uid"`
-	Name      string    `json:"name" db:"name"`
-	CreatedAt time.Time `json:"-" db:"created_at"`
+	ID        string     `json:"id,omitempty" db:"id"`
+	UID       string     `json:"uid" db:"uid"`
+	Name      string     `json:"name" db:"name"`
+	CreatedAt *time.Time `json:"-" db:"created_at"`
+	IsAdmin   bool       `json:"-" db:"is_admin"`
+	Email     *string    `json:"-" db:"email"`
+	Password  *string    `json:"-" db:"password"`
 }
 
 // NewUser creates new user subject

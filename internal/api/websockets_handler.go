@@ -6,23 +6,22 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/melody"
-	"github.com/jmoiron/sqlx"
 )
 
 const (
 	wsSubscriptionSessionKey = "subscription"
-	wsUserIDSessionKey       = "userId"
+	wsUserSessionKey         = "current_user"
 )
 
 func WebsocketsHandler(
 	eventsSubscriber eventbus.Subscriber,
-	db *sqlx.DB,
 	websocket *melody.Melody, // replace to UserRepository
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, err := userFromRequest(db, r)
+		user, err := userFromRequest(r)
 		if err != nil {
 			log.Printf("can't get user from request context: %v", err)
 			w.WriteHeader(http.StatusBadRequest)
@@ -37,7 +36,7 @@ func WebsocketsHandler(
 		}
 
 		sessKeys := make(map[string]interface{})
-		sessKeys[wsUserIDSessionKey] = user.ID
+		sessKeys[wsUserSessionKey] = user
 		sessKeys[wsSubscriptionSessionKey] = subscription
 
 		websocket.HandleRequestWithKeys(w, r, sessKeys)
@@ -48,14 +47,14 @@ func DisconnectHandler(eventsPublisher eventbus.Publisher) func(session *melody.
 	return func(session *melody.Session) {
 		defer closeWsSession(session)
 
-		userID, err := getUserIDFromSession(session)
+		user, err := getUserFromSession(session)
 		if err != nil {
 			log.Printf("extract subscription error: %v", err)
 			return
 		}
 
 		rpc := eventbus.NewCloseSessionRpc()
-		if err := eventsPublisher.PublishServer(eventbus.ServerMessage{UserID: userID, Rpc: rpc}); err != nil {
+		if err := eventsPublisher.PublishServer(eventbus.ServerMessage{UserID: user.ID, Rpc: rpc}); err != nil {
 			log.Printf("publish server rpc error: %v", err)
 		}
 
@@ -92,9 +91,9 @@ func ConnectHandler(session *melody.Session) {
 
 func HandleMessage(eventsPublisher eventbus.Publisher) func(s *melody.Session, msg []byte) {
 	return func(s *melody.Session, msg []byte) {
-		userID, err := getUserIDFromSession(s)
+		user, err := getUserFromSession(s)
 		if err != nil {
-			log.Printf("extract userID error: %v", err)
+			log.Printf("extract user error: %v", err)
 			return
 		}
 
@@ -105,7 +104,7 @@ func HandleMessage(eventsPublisher eventbus.Publisher) func(s *melody.Session, m
 			return
 		}
 
-		if err := eventsPublisher.PublishServer(eventbus.ServerMessage{UserID: userID, Rpc: rpc}); err != nil {
+		if err := eventsPublisher.PublishServer(eventbus.ServerMessage{UserID: user.ID, Rpc: rpc}); err != nil {
 			log.Printf("publish server rpc error: %v", err)
 		}
 	}
@@ -123,16 +122,17 @@ func getUserSubscription(s *melody.Session) (*eventbus.Subscription, error) {
 	return subscription, nil
 }
 
-func getUserIDFromSession(s *melody.Session) (string, error) {
-	userID, ok := s.Keys[wsUserIDSessionKey]
+func getUserFromSession(s *melody.Session) (*core.User, error) {
+	data, ok := s.Keys[wsUserSessionKey]
 	if !ok {
-		return "", fmt.Errorf("no sub for given session: %+v", s)
+		return nil, fmt.Errorf("no sub for given session: %+v", s)
 	}
-	id, ok := userID.(string)
+
+	user, ok := data.(*core.User)
 	if !ok {
-		return "", fmt.Errorf("can't convert userID: %+v", userID)
+		return nil, fmt.Errorf("can't convert to user: %+v", user)
 	}
-	return id, nil
+	return user, nil
 }
 
 func closeWsSession(session *melody.Session) {

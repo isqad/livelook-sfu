@@ -17,7 +17,10 @@ require (
 	google.golang.org/grpc v1.45.0
 )
 
-require github.com/spf13/viper v1.10.1
+require (
+	github.com/DATA-DOG/go-sqlmock v1.5.0
+	github.com/spf13/viper v1.10.1
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect

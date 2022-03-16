@@ -7,15 +7,13 @@ import (
 
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
-	"github.com/jmoiron/sqlx"
 )
 
 func SessionCreateHandler(
 	eventsPublisher eventbus.Publisher,
-	db *sqlx.DB, // replace to UserRepository
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, err := userFromRequest(db, r)
+		user, err := userFromRequest(r)
 		if err != nil {
 			log.Printf("can't get user ID from request context: %v", err)
 			w.WriteHeader(http.StatusBadRequest)

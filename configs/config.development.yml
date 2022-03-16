@@ -13,6 +13,7 @@ app:
   hostname: localhost
   port: 3001
   upload_root: web/static/uploaded
+  secret_key: foobar
 
 firebase_auth_service:
   addr: 127.0.0.1:50053
