@@ -13,7 +13,7 @@ require (
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/pion/rtcp v1.2.9
 	github.com/pion/webrtc/v3 v3.1.25
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	google.golang.org/grpc v1.45.0
 )
 
