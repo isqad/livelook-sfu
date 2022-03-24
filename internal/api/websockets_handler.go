@@ -96,6 +96,7 @@ func HandleMessage(eventsPublisher eventbus.Publisher) func(s *melody.Session, m
 			log.Printf("extract user error: %v", err)
 			return
 		}
+		log.Printf("got message")
 
 		reader := bytes.NewReader(msg)
 		rpc, err := eventbus.RpcFromReader(reader)

@@ -14,10 +14,11 @@ import (
 )
 
 var (
-	errConvertIceCandidate = errors.New("can't convert to ice candidate")
-	errConvertSession      = errors.New("can't convert to session")
-	errPeerNotFound        = errors.New("can't find peer")
-	errUndefinedMethod     = errors.New("undefined method")
+	errConvertIceCandidate  = errors.New("can't convert to ice candidate")
+	errConvertSession       = errors.New("can't convert to session")
+	errConvertAddRemotePeer = errors.New("can't convert to add_remote_peer rpc")
+	errPeerNotFound         = errors.New("can't find peer")
+	errUndefinedMethod      = errors.New("undefined method")
 )
 
 // Options is options of the sfu
@@ -31,8 +32,8 @@ type Commutator struct {
 	Options
 	sessionStorage core.SessionsDBStorer
 
-	peers map[string]*peer
-	mutex sync.RWMutex
+	peers     map[string]*peer
+	peersLock sync.RWMutex
 
 	subscription *eventbus.Subscription
 }
@@ -109,11 +110,34 @@ func (c *Commutator) Start() {
 				if err := c.disallowStreaming(userID); err != nil {
 					log.Printf("commutator: error disallowing streaming: %v", err)
 				}
+			case eventbus.AddRemotePeerMethod:
+				rpc, ok := rpc.(*eventbus.AddRemotePeerRpc)
+				if !ok {
+					log.Printf("commutator: error: %v", errConvertAddRemotePeer)
+					continue
+				}
+
+				if err := c.addRemotePeer(userID, rpc.Params["user_id"]); err != nil {
+					log.Printf("commutator: error on add remote peer: %v", err)
+				}
 			default:
 				log.Printf("commutator: error: %v, %v", errUndefinedMethod, rpc.GetMethod())
 			}
 		}
 	}()
+}
+
+func (c *Commutator) addRemotePeer(userID string, remoteUserID string) error {
+	peer, err := c.findPeer(userID)
+	if err != nil {
+		return err
+	}
+	remotePeer, err := c.findPeer(remoteUserID)
+	if err != nil {
+		return err
+	}
+
+	return remotePeer.addRemotePeer(peer)
 }
 
 func (c *Commutator) createOrUpdateSession(userID string, sessionData *core.Session) error {
@@ -176,7 +200,7 @@ func (c *Commutator) disallowStreaming(userID string) error {
 }
 
 func (c *Commutator) renogotiation(userID string, sdp *webrtc.SessionDescription) error {
-	log.Println("renegotiation")
+	log.Println("commutator: renegotiation")
 
 	peer, err := c.findOrInitPeer(userID)
 	if err != nil {
@@ -196,12 +220,12 @@ func (c *Commutator) renogotiation(userID string, sdp *webrtc.SessionDescription
 }
 
 func (c *Commutator) findOrInitPeer(userID string) (*peer, error) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	p, err := c.findPeer(userID)
+	if err != nil && err != errPeerNotFound {
+		return nil, err
+	}
 
-	var p *peer
-	p, ok := c.peers[userID]
-	if !ok {
+	if err == errPeerNotFound {
 		p = &peer{
 			streamingAllowed: false,
 			iceCandidates:    []*webrtc.ICECandidateInit{},
@@ -215,15 +239,30 @@ func (c *Commutator) findOrInitPeer(userID string) (*peer, error) {
 		}
 		go p.listenAndAccept()
 
+		c.peersLock.Lock()
+		defer c.peersLock.Unlock()
+
 		c.peers[userID] = p
+
+		if err := p.establishPeerConnection(c.EventsPublisher); err != nil {
+			log.Printf("could not to establish peer connection, delete %s from peers map", userID)
+			<-p.close()
+			delete(c.peers, userID)
+
+			return nil, err
+		}
 	}
 
-	if err := p.establishPeerConnection(c.EventsPublisher); err != nil {
-		log.Printf("could not to establish peer connection, delete %s from peers map", userID)
-		p.close()
-		delete(c.peers, userID)
+	return p, nil
+}
 
-		return nil, err
+func (c *Commutator) findPeer(userID string) (*peer, error) {
+	c.peersLock.RLock()
+	defer c.peersLock.RUnlock()
+
+	p, ok := c.peers[userID]
+	if !ok {
+		return nil, errPeerNotFound
 	}
 
 	return p, nil
@@ -234,14 +273,12 @@ func (c *Commutator) closeSessionPeer(userID string) error {
 	if err != nil {
 		return err
 	}
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
 	// Wait until closed
 	<-peer.close()
 
+	c.peersLock.Lock()
 	delete(c.peers, userID)
+	c.peersLock.Unlock()
 
 	if err := c.sessionStorage.SetOffline(userID); err != nil {
 		return err
@@ -250,18 +287,6 @@ func (c *Commutator) closeSessionPeer(userID string) error {
 	log.Printf("commutator: session closed for user: %s", userID)
 
 	return nil
-}
-
-func (c *Commutator) findPeer(userID string) (*peer, error) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	p, ok := c.peers[userID]
-	if !ok {
-		return nil, errPeerNotFound
-	}
-
-	return p, nil
 }
 
 func (c *Commutator) parseRpc(payload string) (userID string, rpc eventbus.Rpc, err error) {

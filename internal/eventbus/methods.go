@@ -21,6 +21,7 @@ const (
 	CloseSessionMethod  Method = "close_session"
 	StartStreamMethod   Method = "start_stream"
 	StopStreamMethod    Method = "stop_stream"
+	AddRemotePeerMethod Method = "add_remote_peer"
 )
 
 type Rpc interface {
@@ -91,6 +92,15 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 		return NewStartStreamRpc(), nil
 	case StopStreamMethod:
 		return NewStopStreamRpc(), nil
+	case AddRemotePeerMethod:
+		u := make(map[string]string)
+		if err := json.Unmarshal(params, &u); err != nil {
+			return nil, err
+		}
+
+		userID := u["user_id"]
+
+		return NewAddRemotePeerRpc(userID), nil
 	default:
 		return nil, ErrUnknownRpcType
 	}
@@ -257,5 +267,31 @@ func (r StopStreamRpc) GetMethod() Method {
 }
 
 func (r StopStreamRpc) ToJSON() ([]byte, error) {
+	return json.Marshal(r)
+}
+
+type AddRemotePeerRpc struct {
+	jsonRpcHead
+	Params map[string]string `json:"params"`
+}
+
+func NewAddRemotePeerRpc(userID string) *AddRemotePeerRpc {
+	rpc := &AddRemotePeerRpc{
+		jsonRpcHead: jsonRpcHead{
+			Version: jsonRpcVersion,
+			Method:  AddRemotePeerMethod,
+		},
+		Params: make(map[string]string),
+	}
+	rpc.Params["user_id"] = userID
+
+	return rpc
+}
+
+func (r AddRemotePeerRpc) GetMethod() Method {
+	return r.Method
+}
+
+func (r AddRemotePeerRpc) ToJSON() ([]byte, error) {
 	return json.Marshal(r)
 }

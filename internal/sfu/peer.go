@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/isqad/livelook-sfu/internal/eventbus"
@@ -13,7 +14,8 @@ import (
 )
 
 const (
-	rtcpPLIInterval = time.Second * 3
+	rtcpPLIInterval            = time.Second * 1
+	dtlsRetransmissionInterval = 100 * time.Millisecond
 )
 
 var (
@@ -26,12 +28,19 @@ type peer struct {
 
 	connection *webrtc.PeerConnection
 
-	iceCandidates []*webrtc.ICECandidateInit
+	iceCandidatesLock sync.RWMutex
+	iceCandidates     []*webrtc.ICECandidateInit // TODO: rename to pendingICECandidates
+
+	videoTransceiver *webrtc.RTPTransceiver
+	audioTransceiver *webrtc.RTPTransceiver
 
 	localVideoTrack *webrtc.TrackLocalStaticRTP
 	localAudioTrack *webrtc.TrackLocalStaticRTP
 
-	remotePeers []*peer
+	remotePeersLock sync.RWMutex
+	remotePeers     []*peer
+
+	lock sync.Mutex
 
 	closeChan        chan struct{}
 	closed           chan struct{}
@@ -40,28 +49,30 @@ type peer struct {
 	stopParentTracks chan struct{}
 }
 
+func (p *peer) addRemotePeer(remotePeer *peer) error {
+	err := remotePeer.videoTransceiver.Sender().ReplaceTrack(p.localVideoTrack)
+	if err != nil {
+		return err
+	}
+	err = remotePeer.audioTransceiver.Sender().ReplaceTrack(p.localAudioTrack)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (p *peer) establishPeerConnection(eventsPublisher eventbus.Publisher) error {
-	peerConnection, err := webrtc.NewPeerConnection(peerConnectionConfig)
+	api, err := buildAPI()
+	if err != nil {
+		return err
+	}
+
+	peerConnection, err := api.NewPeerConnection(peerConnectionConfig)
 	if err != nil {
 		return err
 	}
 
 	peerConnection.OnICECandidate(p.onICECandidate(eventsPublisher))
-
-	if _, err := peerConnection.AddTransceiverFromKind(
-		webrtc.RTPCodecTypeAudio,
-		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendrecv},
-	); err != nil {
-		return err
-	}
-	if _, err := peerConnection.AddTransceiverFromKind(
-		webrtc.RTPCodecTypeVideo,
-		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendrecv},
-	); err != nil {
-		return err
-	}
-
-	peerConnection.OnTrack(p.onTrack)
 	peerConnection.OnConnectionStateChange(func(pcs webrtc.PeerConnectionState) {
 		log.Printf("OnConnectionStateChange: %v", pcs)
 	})
@@ -77,32 +88,96 @@ func (p *peer) establishPeerConnection(eventsPublisher eventbus.Publisher) error
 	peerConnection.OnSignalingStateChange(func(ss webrtc.SignalingState) {
 		log.Printf("OnSignalingStateChange: %v", ss)
 	})
+	peerConnection.OnTrack(p.onTrack)
+
+	log.Println("add video transciever")
+	p.videoTransceiver, err = peerConnection.AddTransceiverFromKind(
+		webrtc.RTPCodecTypeVideo,
+		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendrecv},
+	)
+	if err != nil {
+		return err
+	}
+
+	log.Println("add audio transciever")
+	p.audioTransceiver, err = peerConnection.AddTransceiverFromKind(
+		webrtc.RTPCodecTypeAudio,
+		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendrecv},
+	)
+	if err != nil {
+		return err
+	}
 
 	p.connection = peerConnection
 
 	return nil
 }
 
+func buildAPI() (*webrtc.API, error) {
+	me, err := createMediaEngine()
+	if err != nil {
+		return nil, err
+	}
+
+	se := webrtc.SettingEngine{}
+	// se.DisableMediaEngineCopy(true)
+	se.DisableSRTPReplayProtection(true)
+	se.DisableSRTCPReplayProtection(true)
+	se.SetDTLSRetransmissionInterval(dtlsRetransmissionInterval)
+
+	api := webrtc.NewAPI(
+		webrtc.WithMediaEngine(me),
+		webrtc.WithSettingEngine(se),
+	)
+	return api, nil
+}
+
 func (p *peer) setRemoteDescription(sdp webrtc.SessionDescription) error {
+	log.Println("setRemoteDescription")
 	if p.connection == nil {
 		return errConnectionNotInitialized
 	}
 
-	return p.connection.SetRemoteDescription(sdp)
+	if err := p.connection.SetRemoteDescription(sdp); err != nil {
+		return err
+	}
+
+	p.iceCandidatesLock.Lock()
+	defer p.iceCandidatesLock.Unlock()
+
+	if len(p.iceCandidates) == 0 {
+		log.Println("setRemoteDescription: no pending ICE candidates, return")
+		return nil
+	}
+
+	log.Printf("setRemoteDescription: %d pending ICE candidates, add it all to PC", len(p.iceCandidates))
+	for _, c := range p.iceCandidates {
+		iceCandidate := *c
+
+		if err := p.connection.AddICECandidate(iceCandidate); err != nil {
+			return err
+		}
+	}
+
+	p.clearCandidates()
+
+	return nil
 }
 
 func (p *peer) addICECandidate(candidate *webrtc.ICECandidateInit) error {
+	p.iceCandidatesLock.Lock()
+	defer p.iceCandidatesLock.Unlock()
+
 	if p.connection == nil {
 		return errConnectionNotInitialized
 	}
 
 	p.iceCandidates = append(p.iceCandidates, candidate)
+	log.Printf("addICECandidate: %d pending ICE candidates", len(p.iceCandidates))
 
 	if p.connection.CurrentRemoteDescription() == nil {
 		return nil
 	}
-
-	defer p.clearCandidates()
 
 	for _, c := range p.iceCandidates {
 		iceCandidate := *c
@@ -112,10 +187,15 @@ func (p *peer) addICECandidate(candidate *webrtc.ICECandidateInit) error {
 		}
 	}
 
+	p.clearCandidates()
+
 	return nil
 }
 
 func (p *peer) clearCandidates() {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	p.iceCandidates = []*webrtc.ICECandidateInit{}
 }
 
@@ -123,6 +203,8 @@ func (p *peer) createAnswer() (*eventbus.SDPRpc, error) {
 	if p.connection == nil {
 		return nil, errConnectionNotInitialized
 	}
+
+	log.Println("createAnswer")
 
 	answer, err := p.connection.CreateAnswer(nil)
 	if err != nil {
@@ -166,10 +248,15 @@ func (p *peer) listenAndAccept() {
 }
 
 func (p *peer) clearRemotePeers() {
+	p.remotePeersLock.RLock()
 	for _, remotePeer := range p.remotePeers {
 		remotePeer.stopParentTracks <- struct{}{}
 	}
+	p.remotePeersLock.RUnlock()
+
+	p.lock.Lock()
 	p.remotePeers = []*peer{}
+	p.lock.Unlock()
 }
 
 func (p *peer) close() <-chan struct{} {
@@ -181,7 +268,6 @@ func (p *peer) close() <-chan struct{} {
 func (p *peer) onICECandidate(eventsPublisher eventbus.Publisher) func(*webrtc.ICECandidate) {
 	return func(candidate *webrtc.ICECandidate) {
 		if candidate == nil {
-			log.Println("No more ICE candidates")
 			return
 		}
 
@@ -221,9 +307,9 @@ func (p *peer) createLocalVideoTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 		ticker := time.NewTicker(rtcpPLIInterval)
 		for range ticker.C {
 			// TODO: stop the goroutine
-			if !p.streamingAllowed {
-				continue
-			}
+			// if !p.streamingAllowed {
+			// 	continue
+			// }
 
 			if err := p.connection.WriteRTCP(
 				[]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remoteTrack.SSRC())}},
@@ -235,12 +321,15 @@ func (p *peer) createLocalVideoTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 	}()
 
 	// Create a local track, all our SFU clients will be fed via this track
+	log.Printf("remote videocodec capability: %+v", remoteTrack.Codec().RTPCodecCapability)
 	localVideoTrack, err := webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, "video", "pion")
 	if err != nil {
 		return err
 	}
 
+	p.lock.Lock()
 	p.localVideoTrack = localVideoTrack
+	p.lock.Unlock()
 
 	return p.forwardPacketsToLocalTrack(remoteTrack, localVideoTrack)
 }
@@ -248,12 +337,15 @@ func (p *peer) createLocalVideoTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 func (p *peer) createLocalAudioTrackForwarding(remoteTrack *webrtc.TrackRemote) error {
 	log.Println("createLocalAudioTrackForwarding")
 	// Create a local track, all our SFU clients will be fed via this track
+	log.Printf("remote audiocodec capability: %+v", remoteTrack.Codec().RTPCodecCapability)
 	localAudioTrack, err := webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, "audio", "pion")
 	if err != nil {
 		return err
 	}
 
+	p.lock.Lock()
 	p.localAudioTrack = localAudioTrack
+	p.lock.Unlock()
 
 	return p.forwardPacketsToLocalTrack(remoteTrack, localAudioTrack)
 }
@@ -265,14 +357,17 @@ func (p *peer) forwardPacketsToLocalTrack(remoteTrack *webrtc.TrackRemote, local
 
 	rtpBuf := make([]byte, 1400)
 	for {
-		if !p.streamingAllowed {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
+		// if !p.streamingAllowed {
+		// 	time.Sleep(100 * time.Millisecond)
+		// 	continue
+		// }
 
 		i, _, err := remoteTrack.Read(rtpBuf)
 		if err != nil {
 			return err
+		}
+		if remoteTrack.Kind() == webrtc.RTPCodecTypeVideo {
+			log.Printf("read bytes: %v", i)
 		}
 
 		// ErrClosedPipe means we don't have any subscribers, this is ok if no peers have connected yet
