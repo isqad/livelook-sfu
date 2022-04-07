@@ -1,10 +1,20 @@
 package sfu
 
-import "github.com/pion/webrtc/v3"
+import (
+	"github.com/pion/interceptor"
+	"github.com/pion/webrtc/v3"
+)
 
 func createMediaEngine() (*webrtc.MediaEngine, error) {
 	mediaEngine := &webrtc.MediaEngine{}
 	if err := registerCodecs(mediaEngine); err != nil {
+		return nil, err
+	}
+
+	i := &interceptor.Registry{}
+
+	// Use the default set of Interceptors
+	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, i); err != nil {
 		return nil, err
 	}
 

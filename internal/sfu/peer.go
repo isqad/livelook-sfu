@@ -16,6 +16,7 @@ import (
 const (
 	rtcpPLIInterval            = time.Second * 1
 	dtlsRetransmissionInterval = 100 * time.Millisecond
+	mtu                        = 1400
 )
 
 var (
@@ -321,7 +322,6 @@ func (p *peer) createLocalVideoTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 	}()
 
 	// Create a local track, all our SFU clients will be fed via this track
-	log.Printf("remote videocodec capability: %+v", remoteTrack.Codec().RTPCodecCapability)
 	localVideoTrack, err := webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, "video", "pion")
 	if err != nil {
 		return err
@@ -353,21 +353,14 @@ func (p *peer) createLocalAudioTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 func (p *peer) forwardPacketsToLocalTrack(remoteTrack *webrtc.TrackRemote, localTrack *webrtc.TrackLocalStaticRTP) error {
 	log.Printf("forwardPacketsToLocalTrack: %s", remoteTrack.Kind().String())
 
-	defer func() { log.Printf("forwardPacketsToLocalTrack %s has been closed\n", remoteTrack.Kind().String()) }()
-
-	rtpBuf := make([]byte, 1400)
-	for {
+	for rtpBuf := make([]byte, mtu); ; {
 		// if !p.streamingAllowed {
 		// 	time.Sleep(100 * time.Millisecond)
 		// 	continue
 		// }
-
 		i, _, err := remoteTrack.Read(rtpBuf)
 		if err != nil {
 			return err
-		}
-		if remoteTrack.Kind() == webrtc.RTPCodecTypeVideo {
-			log.Printf("read bytes: %v", i)
 		}
 
 		// ErrClosedPipe means we don't have any subscribers, this is ok if no peers have connected yet
