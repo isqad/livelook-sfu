@@ -22,6 +22,7 @@ type Config struct {
 type RTCConfig struct {
 	ICEPortRangeStart uint32
 	ICEPortRangeEnd   uint32
+	Interfaces        InterfacesConfig
 }
 
 type CodecSpec struct {
@@ -51,15 +52,23 @@ type DirectionConfig struct {
 	RTCPFeedback       RTCPFeedbackConfig
 }
 
+type InterfacesConfig struct {
+	Includes []string
+}
+
 type PeerConfig struct {
 	EnabledCodecs []CodecSpec
 }
 
 func NewConfig() *Config {
+	// TODO: extract to yaml
 	conf := &Config{
 		RTC: RTCConfig{
 			ICEPortRangeStart: 50000,
 			ICEPortRangeEnd:   60000,
+			Interfaces: InterfacesConfig{
+				Includes: []string{"enp3s0"},
+			},
 		},
 		Peer: PeerConfig{
 			EnabledCodecs: []CodecSpec{
@@ -73,6 +82,8 @@ func NewConfig() *Config {
 }
 
 func NewWebRTCConfig(config *Config) (*WebRTCConfig, error) {
+	rtcConf := config.RTC
+
 	c := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
@@ -138,6 +149,23 @@ func NewWebRTCConfig(config *Config) (*WebRTCConfig, error) {
 				{Type: webrtc.TypeRTCPFBNACK, Parameter: "pli"},
 			},
 		},
+	}
+
+	// Filter interfaces
+	if len(rtcConf.Interfaces.Includes) != 0 {
+		includes := rtcConf.Interfaces.Includes
+		s.SetInterfaceFilter(func(s string) bool {
+			// filter by include interfaces
+			if len(includes) > 0 {
+				for _, iface := range includes {
+					if iface == s {
+						return true
+					}
+				}
+				return false
+			}
+			return true
+		})
 	}
 
 	return &WebRTCConfig{
