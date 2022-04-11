@@ -21,6 +21,8 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
 
@@ -73,7 +75,7 @@ func main() {
 		log.Fatal(err)
 	}
 	sfuConfig := config.NewConfig()
-	_, err = service.NewSessionsManager(sfuConfig, sfuRouter)
+	_, err = service.NewSessionsManager(sfuConfig, sfuRouter, redisPubSub)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -136,6 +138,8 @@ func main() {
 	staticDir := path.Join(cwd, "web", staticPrefix)
 	r.Method("GET", staticPrefix+"*", http.StripPrefix(staticPrefix, http.FileServer(http.Dir(staticDir))))
 	r.Method("GET", "/favicon.ico", http.FileServer(http.Dir(staticDir)))
+
+	r.Handle("/metrics", promhttp.Handler())
 
 	server := &http.Server{
 		Addr:              ":" + viper.GetString("app.port"),

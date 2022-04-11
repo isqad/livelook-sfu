@@ -10,8 +10,8 @@ const (
 )
 
 var DefaultStunServers = []string{
-	"stun.l.google.com:19302",
-	"stun1.l.google.com:19302",
+	"stun:stun.l.google.com:19302",
+	"stun:stun1.l.google.com:19302",
 }
 
 type Config struct {
@@ -74,6 +74,11 @@ func NewConfig() *Config {
 
 func NewWebRTCConfig(config *Config) (*WebRTCConfig, error) {
 	c := webrtc.Configuration{
+		ICEServers: []webrtc.ICEServer{
+			{
+				URLs: DefaultStunServers,
+			},
+		},
 		SDPSemantics: webrtc.SDPSemanticsUnifiedPlan,
 	}
 	s := webrtc.SettingEngine{

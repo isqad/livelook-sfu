@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"log"
 	"sync"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/livelook-sfu/internal/rtc"
+	"github.com/isqad/livelook-sfu/internal/telemetry"
 )
 
 // SessionsManager управляет всеми сессиями пользователей
@@ -18,11 +20,14 @@ type SessionsManager struct {
 
 	lock     sync.RWMutex
 	sessions map[core.UserSessionID]*rtc.Peer
+
+	rpcSink eventbus.Publisher
 }
 
 func NewSessionsManager(
 	cfg *config.Config,
 	router *eventbus.Router,
+	sink eventbus.Publisher,
 ) (*SessionsManager, error) {
 	rtcConf, err := config.NewWebRTCConfig(cfg)
 	if err != nil {
@@ -33,6 +38,7 @@ func NewSessionsManager(
 		router:    router,
 		cfg:       cfg,
 		rtcConfig: rtcConf,
+		rpcSink:   sink,
 		sessions:  make(map[core.UserSessionID]*rtc.Peer),
 	}
 
@@ -44,19 +50,27 @@ func NewSessionsManager(
 func (s *SessionsManager) StartSession(userID core.UserSessionID, session *core.Session) error {
 	log.Println("received message to start session")
 
+	if session.Sdp == nil {
+		return errors.New("no sdp in session")
+	}
+
 	peer, err := s.findOrInitPeer(userID, session)
 	if err != nil {
 		return err
 	}
 
-	participant, err := rtc.NewParticipant(userID, s.cfg.Peer.EnabledCodecs, s.rtcConfig)
+	participant, err := rtc.NewParticipant(userID, s.rpcSink, s.cfg.Peer.EnabledCodecs, s.rtcConfig)
 	if err != nil {
 		return err
 	}
 
 	peer.Join(participant)
 
-	return nil
+	telemetry.SessionStarted()
+
+	// TODO: публикацию отделить от создания сессии
+	// должно быть постоянным только subscriber peer соединение, а publisher pc должен быть активен только по отдельному запросу
+	return participant.HandleOffer(*session.Sdp)
 }
 
 func (s *SessionsManager) findOrInitPeer(userID core.UserSessionID, session *core.Session) (*rtc.Peer, error) {
@@ -68,7 +82,7 @@ func (s *SessionsManager) findOrInitPeer(userID core.UserSessionID, session *cor
 		return peer, nil
 	}
 
-	peer = rtc.NewPeer(session, s.cfg.Peer, s.rtcConfig)
+	peer = rtc.NewPeer(session, s.cfg.Peer, s.rtcConfig, s.rpcSink)
 
 	s.lock.Lock()
 	s.sessions[userID] = peer

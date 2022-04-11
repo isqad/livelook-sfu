@@ -5,6 +5,7 @@ import (
 
 	"github.com/isqad/livelook-sfu/internal/config"
 	"github.com/isqad/livelook-sfu/internal/core"
+	"github.com/isqad/livelook-sfu/internal/eventbus"
 )
 
 type Peer struct {
@@ -14,14 +15,17 @@ type Peer struct {
 	session      *core.Session
 	lock         sync.RWMutex
 	participants map[core.UserSessionID]*Participant
+
+	rpcSink eventbus.Publisher
 }
 
-func NewPeer(session *core.Session, peerConfig config.PeerConfig, rtcConfig *config.WebRTCConfig) *Peer {
+func NewPeer(session *core.Session, peerConfig config.PeerConfig, rtcConfig *config.WebRTCConfig, rpcSink eventbus.Publisher) *Peer {
 	return &Peer{
 		cfg:          peerConfig,
 		rtcCfg:       rtcConfig,
 		session:      session,
 		participants: make(map[core.UserSessionID]*Participant),
+		rpcSink:      rpcSink,
 	}
 }
 

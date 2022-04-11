@@ -37,11 +37,19 @@ func NewPCTransport(params TransportParams) (*PCTransport, error) {
 		return nil, err
 	}
 
-	return &PCTransport{
+	t := &PCTransport{
 		pc:                pc,
 		me:                me,
 		pendingCandidates: make([]webrtc.ICECandidateInit, 0),
-	}, nil
+	}
+
+	t.pc.OnICEGatheringStateChange(func(state webrtc.ICEGathererState) {
+		if state == webrtc.ICEGathererStateComplete {
+			log.Println("OnICEGatheringStateChange: complete")
+		}
+	})
+
+	return t, nil
 }
 
 func newPeerConnection(params TransportParams) (*webrtc.PeerConnection, *webrtc.MediaEngine, error) {
@@ -49,6 +57,7 @@ func newPeerConnection(params TransportParams) (*webrtc.PeerConnection, *webrtc.
 
 	me, err := createMediaEngine(params.EnabledCodecs, params.Config.Publisher)
 	if err != nil {
+		log.Printf("newPeerConnection: %v", err)
 		return nil, nil, err
 	}
 
@@ -60,5 +69,12 @@ func newPeerConnection(params TransportParams) (*webrtc.PeerConnection, *webrtc.
 	se.SetReceiveMTU(mtu)
 	se.SetICETimeouts(iceDisconnectedTimeout, iceFailedTimeout, iceKeepaliveInterval)
 
-	return nil, me, nil
+	api := webrtc.NewAPI(
+		webrtc.WithMediaEngine(me),
+		webrtc.WithSettingEngine(se),
+	)
+
+	pc, err := api.NewPeerConnection(params.Config.Configuration)
+
+	return pc, me, err
 }
