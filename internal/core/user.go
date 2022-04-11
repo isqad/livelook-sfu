@@ -11,20 +11,22 @@ const (
 	AdminSessionNameKey = "_livelook_admin_session"
 )
 
+type UserSessionID string
+
 // User is central subject of the application
 type User struct {
-	ID        string     `json:"id,omitempty" db:"id"`
-	UID       string     `json:"uid" db:"uid"`
-	Name      string     `json:"name" db:"name"`
-	CreatedAt *time.Time `json:"-" db:"created_at"`
-	IsAdmin   bool       `json:"-" db:"is_admin"`
-	Email     *string    `json:"-" db:"email"`
-	Password  *string    `json:"-" db:"password"`
+	ID        UserSessionID `json:"id,omitempty" db:"id"`
+	UID       string        `json:"uid" db:"uid"`
+	Name      string        `json:"name" db:"name"`
+	CreatedAt *time.Time    `json:"-" db:"created_at"`
+	IsAdmin   bool          `json:"-" db:"is_admin"`
+	Email     *string       `json:"-" db:"email"`
+	Password  *string       `json:"-" db:"password"`
 }
 
 // NewUser creates new user subject
 func NewUser() *User {
-	return &User{ID: uuid.New().String()}
+	return &User{ID: UserSessionID(uuid.New().String())}
 }
 
 func FindUserByUID(db *sqlx.DB, uid string) (*User, error) {
@@ -54,7 +56,7 @@ func (u *User) Save(db *sqlx.DB) error {
 	if err != nil {
 		return err
 	}
-	u.ID = id
+	u.ID = UserSessionID(id)
 
 	return nil
 }

@@ -14,8 +14,9 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/isqad/livelook-sfu/internal/api"
+	"github.com/isqad/livelook-sfu/internal/config"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
-	"github.com/isqad/livelook-sfu/internal/sfu"
+	"github.com/isqad/livelook-sfu/internal/service"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
@@ -67,15 +68,17 @@ func main() {
 		},
 	)
 
-	commutator, err := sfu.NewCommutator(sfu.Options{
-		DB:               db,
-		EventsPublisher:  redisPubSub,
-		EventsSubscriber: redisPubSub,
-	})
+	sfuRouter, err := eventbus.NewRouter(redisPubSub)
 	if err != nil {
 		log.Fatal(err)
 	}
-	commutator.Start()
+	sfuConfig := config.NewConfig()
+	_, err = service.NewSessionsManager(sfuConfig, sfuRouter)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	sfuRouter.Start()
 
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)

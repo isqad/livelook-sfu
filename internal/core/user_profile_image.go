@@ -27,17 +27,17 @@ type UserProfileImageSaver interface {
 
 // UserProfileImage аватарки пользователя
 type UserProfileImage struct {
-	ID        int64     `json:"id,omitempty" db:"id"`
-	Position  int       `json:"position,omitempty" db:"position"`
-	Filename  string    `json:"filename" db:"filename"`
-	UserID    string    `json:"user_id,omitempty" db:"user_id"`
-	CreatedAt time.Time `json:"-" db:"created_at"`
+	ID        int64         `json:"id,omitempty" db:"id"`
+	Position  int           `json:"position,omitempty" db:"position"`
+	Filename  string        `json:"filename" db:"filename"`
+	UserID    UserSessionID `json:"user_id,omitempty" db:"user_id"`
+	CreatedAt time.Time     `json:"-" db:"created_at"`
 
 	rootDir      string
 	idPartitions []string
 }
 
-func NewUserProfileImage(userID string, options ...string) *UserProfileImage {
+func NewUserProfileImage(userID UserSessionID, options ...string) *UserProfileImage {
 	img := &UserProfileImage{UserID: userID, CreatedAt: time.Now().UTC()}
 	if len(options) > 0 && options[0] != "" {
 		img.rootDir = options[0]

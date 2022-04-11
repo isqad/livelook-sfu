@@ -32,7 +32,7 @@ type Commutator struct {
 	Options
 	sessionStorage core.SessionsDBStorer
 
-	peers     map[string]*peer
+	peers     map[core.UserSessionID]*peer
 	peersLock sync.RWMutex
 
 	subscription *eventbus.Subscription
@@ -41,7 +41,7 @@ type Commutator struct {
 func NewCommutator(options Options) (*Commutator, error) {
 	comm := &Commutator{
 		Options: options,
-		peers:   make(map[string]*peer),
+		peers:   make(map[core.UserSessionID]*peer),
 	}
 	subscription, err := comm.EventsSubscriber.SubscribeServer()
 	if err != nil {
@@ -61,65 +61,65 @@ func (c *Commutator) Start() {
 		channel := c.subscription.Channel()
 
 		for msg := range channel {
-			userID, rpc, err := c.parseRpc(msg.Payload)
+			_, rpc, err := c.parseRpc(msg.Payload)
 			if err != nil {
 				log.Printf("commutator: error: %v", err)
 				continue
 			}
 
 			switch rpc.GetMethod() {
-			case eventbus.ICECandidateMethod:
-				rpc, ok := rpc.(*eventbus.ICECandidateRpc)
-				if !ok {
-					log.Printf("commutator: error: %v", errConvertIceCandidate)
-					continue
-				}
+			// case eventbus.ICECandidateMethod:
+			// 	rpc, ok := rpc.(*eventbus.ICECandidateRpc)
+			// 	if !ok {
+			// 		log.Printf("commutator: error: %v", errConvertIceCandidate)
+			// 		continue
+			// 	}
 
-				if err := c.addICECandidate(userID, rpc.Params); err != nil {
-					log.Printf("commutator: error add ice candidate: %v", err)
-				}
-			case eventbus.CreateSessionMethod:
-				rpc, ok := rpc.(*eventbus.CreateSessionRpc)
-				if !ok {
-					log.Printf("commutator: error: %v", errConvertSession)
-					continue
-				}
+			// 	if err := c.addICECandidate(userID, rpc.Params); err != nil {
+			// 		log.Printf("commutator: error add ice candidate: %v", err)
+			// 	}
+			// case eventbus.CreateSessionMethod:
+			// 	rpc, ok := rpc.(*eventbus.CreateSessionRpc)
+			// 	if !ok {
+			// 		log.Printf("commutator: error: %v", errConvertSession)
+			// 		continue
+			// 	}
 
-				if err := c.createOrUpdateSession(userID, rpc.Params); err != nil {
-					log.Printf("commutator: error save session: %v", err)
-				}
-			case eventbus.CloseSessionMethod:
-				if err := c.closeSessionPeer(userID); err != nil {
-					log.Printf("commutator: error close session: %v", err)
-				}
-			case eventbus.RenegotiationMethod:
-				rpc, ok := rpc.(*eventbus.RenegotiationRpc)
-				if !ok {
-					log.Printf("commutator: error: %v", errConvertSession)
-					continue
-				}
+			// 	if err := c.createOrUpdateSession(userID, rpc.Params); err != nil {
+			// 		log.Printf("commutator: error save session: %v", err)
+			// 	}
+			// case eventbus.CloseSessionMethod:
+			// 	if err := c.closeSessionPeer(userID); err != nil {
+			// 		log.Printf("commutator: error close session: %v", err)
+			// 	}
+			// case eventbus.RenegotiationMethod:
+			// 	rpc, ok := rpc.(*eventbus.RenegotiationRpc)
+			// 	if !ok {
+			// 		log.Printf("commutator: error: %v", errConvertSession)
+			// 		continue
+			// 	}
 
-				if err := c.renogotiation(userID, rpc.Params); err != nil {
-					log.Printf("commutator: renegotiation error: %v", err)
-				}
-			case eventbus.StartStreamMethod:
-				if err := c.allowStreaming(userID); err != nil {
-					log.Printf("commutator: error allowing streaming: %v", err)
-				}
-			case eventbus.StopStreamMethod:
-				if err := c.disallowStreaming(userID); err != nil {
-					log.Printf("commutator: error disallowing streaming: %v", err)
-				}
-			case eventbus.AddRemotePeerMethod:
-				rpc, ok := rpc.(*eventbus.AddRemotePeerRpc)
-				if !ok {
-					log.Printf("commutator: error: %v", errConvertAddRemotePeer)
-					continue
-				}
+			// 	if err := c.renogotiation(userID, rpc.Params); err != nil {
+			// 		log.Printf("commutator: renegotiation error: %v", err)
+			// 	}
+			// case eventbus.StartStreamMethod:
+			// 	if err := c.allowStreaming(userID); err != nil {
+			// 		log.Printf("commutator: error allowing streaming: %v", err)
+			// 	}
+			// case eventbus.StopStreamMethod:
+			// 	if err := c.disallowStreaming(userID); err != nil {
+			// 		log.Printf("commutator: error disallowing streaming: %v", err)
+			// 	}
+			// case eventbus.AddRemotePeerMethod:
+			// 	rpc, ok := rpc.(*eventbus.AddRemotePeerRpc)
+			// 	if !ok {
+			// 		log.Printf("commutator: error: %v", errConvertAddRemotePeer)
+			// 		continue
+			// 	}
 
-				if err := c.addRemotePeer(userID, rpc.Params["user_id"]); err != nil {
-					log.Printf("commutator: error on add remote peer: %v", err)
-				}
+			// 	if err := c.addRemotePeer(userID, rpc.Params["user_id"]); err != nil {
+			// 		log.Printf("commutator: error on add remote peer: %v", err)
+			// 	}
 			default:
 				log.Printf("commutator: error: %v, %v", errUndefinedMethod, rpc.GetMethod())
 			}
@@ -127,7 +127,7 @@ func (c *Commutator) Start() {
 	}()
 }
 
-func (c *Commutator) addRemotePeer(userID string, remoteUserID string) error {
+func (c *Commutator) addRemotePeer(userID core.UserSessionID, remoteUserID core.UserSessionID) error {
 	peer, err := c.findPeer(userID)
 	if err != nil {
 		return err
@@ -140,7 +140,7 @@ func (c *Commutator) addRemotePeer(userID string, remoteUserID string) error {
 	return remotePeer.addRemotePeer(peer)
 }
 
-func (c *Commutator) createOrUpdateSession(userID string, sessionData *core.Session) error {
+func (c *Commutator) createOrUpdateSession(userID core.UserSessionID, sessionData *core.Session) error {
 	peer, err := c.findOrInitPeer(userID)
 	if err != nil {
 		return err
@@ -161,14 +161,14 @@ func (c *Commutator) createOrUpdateSession(userID string, sessionData *core.Sess
 		return err
 	}
 
-	if err := c.EventsPublisher.PublishClient(userID, answer); err != nil {
+	if err := c.EventsPublisher.PublishClient(core.UserSessionID(userID), answer); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c *Commutator) addICECandidate(userID string, candidate *webrtc.ICECandidateInit) error {
+func (c *Commutator) addICECandidate(userID core.UserSessionID, candidate *webrtc.ICECandidateInit) error {
 	peer, err := c.findOrInitPeer(userID)
 	if err != nil {
 		return err
@@ -177,7 +177,7 @@ func (c *Commutator) addICECandidate(userID string, candidate *webrtc.ICECandida
 	return peer.addICECandidate(candidate)
 }
 
-func (c *Commutator) allowStreaming(userID string) error {
+func (c *Commutator) allowStreaming(userID core.UserSessionID) error {
 	peer, err := c.findOrInitPeer(userID)
 	if err != nil {
 		return err
@@ -188,7 +188,7 @@ func (c *Commutator) allowStreaming(userID string) error {
 	return nil
 }
 
-func (c *Commutator) disallowStreaming(userID string) error {
+func (c *Commutator) disallowStreaming(userID core.UserSessionID) error {
 	peer, err := c.findOrInitPeer(userID)
 	if err != nil {
 		return err
@@ -199,7 +199,7 @@ func (c *Commutator) disallowStreaming(userID string) error {
 	return nil
 }
 
-func (c *Commutator) renogotiation(userID string, sdp *webrtc.SessionDescription) error {
+func (c *Commutator) renogotiation(userID core.UserSessionID, sdp *webrtc.SessionDescription) error {
 	log.Println("commutator: renegotiation")
 
 	peer, err := c.findOrInitPeer(userID)
@@ -219,7 +219,7 @@ func (c *Commutator) renogotiation(userID string, sdp *webrtc.SessionDescription
 	return c.EventsPublisher.PublishClient(userID, answerRpc)
 }
 
-func (c *Commutator) findOrInitPeer(userID string) (*peer, error) {
+func (c *Commutator) findOrInitPeer(userID core.UserSessionID) (*peer, error) {
 	p, err := c.findPeer(userID)
 	if err != nil && err != errPeerNotFound {
 		return nil, err
@@ -256,7 +256,7 @@ func (c *Commutator) findOrInitPeer(userID string) (*peer, error) {
 	return p, nil
 }
 
-func (c *Commutator) findPeer(userID string) (*peer, error) {
+func (c *Commutator) findPeer(userID core.UserSessionID) (*peer, error) {
 	c.peersLock.RLock()
 	defer c.peersLock.RUnlock()
 
@@ -268,7 +268,7 @@ func (c *Commutator) findPeer(userID string) (*peer, error) {
 	return p, nil
 }
 
-func (c *Commutator) closeSessionPeer(userID string) error {
+func (c *Commutator) closeSessionPeer(userID core.UserSessionID) error {
 	peer, err := c.findPeer(userID)
 	if err != nil {
 		return err
@@ -280,23 +280,23 @@ func (c *Commutator) closeSessionPeer(userID string) error {
 	delete(c.peers, userID)
 	c.peersLock.Unlock()
 
-	if err := c.sessionStorage.SetOffline(userID); err != nil {
-		return err
-	}
+	// if err := c.sessionStorage.SetOffline(userID); err != nil {
+	// 	return err
+	// }
 
 	log.Printf("commutator: session closed for user: %s", userID)
 
 	return nil
 }
 
-func (c *Commutator) parseRpc(payload string) (userID string, rpc eventbus.Rpc, err error) {
+func (c *Commutator) parseRpc(payload string) (userID core.UserSessionID, rpc eventbus.Rpc, err error) {
 	serverMessage := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(payload), &serverMessage); err != nil {
 		log.Printf("commutator: error: %v", err)
 		return "", nil, err
 	}
 
-	userID, ok := serverMessage["user_id"].(string)
+	userID, ok := serverMessage["user_id"].(core.UserSessionID)
 	if !ok {
 		err := errors.New("can't get user id")
 		log.Printf("commutator: error: %v", err)

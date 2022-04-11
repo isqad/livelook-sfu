@@ -8,13 +8,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
 
 const (
-	rtcpPLIInterval            = time.Second * 1
+	rtcpPLIInterval            = time.Second * 3
 	dtlsRetransmissionInterval = 100 * time.Millisecond
 	mtu                        = 1400
 )
@@ -24,7 +25,7 @@ var (
 )
 
 type peer struct {
-	userID           string
+	userID           core.UserSessionID
 	streamingAllowed bool
 
 	connection *webrtc.PeerConnection
@@ -115,22 +116,23 @@ func (p *peer) establishPeerConnection(eventsPublisher eventbus.Publisher) error
 }
 
 func buildAPI() (*webrtc.API, error) {
-	me, err := createMediaEngine()
-	if err != nil {
-		return nil, err
-	}
+	// me, err := rtc.createMediaEngine([]*config.CodecSpec{})
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	se := webrtc.SettingEngine{}
-	// se.DisableMediaEngineCopy(true)
-	se.DisableSRTPReplayProtection(true)
-	se.DisableSRTCPReplayProtection(true)
-	se.SetDTLSRetransmissionInterval(dtlsRetransmissionInterval)
+	// se := webrtc.SettingEngine{}
+	// // se.DisableMediaEngineCopy(true)
+	// se.DisableSRTPReplayProtection(true)
+	// se.DisableSRTCPReplayProtection(true)
+	// se.SetDTLSRetransmissionInterval(dtlsRetransmissionInterval)
+	// se.SetReceiveMTU(mtu)
 
-	api := webrtc.NewAPI(
-		webrtc.WithMediaEngine(me),
-		webrtc.WithSettingEngine(se),
-	)
-	return api, nil
+	// api := webrtc.NewAPI(
+	// 	webrtc.WithMediaEngine(me),
+	// 	webrtc.WithSettingEngine(se),
+	// )
+	return nil, nil
 }
 
 func (p *peer) setRemoteDescription(sdp webrtc.SessionDescription) error {
@@ -318,6 +320,13 @@ func (p *peer) createLocalVideoTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 				fmt.Printf("onTrack send PLI error: %v\n", err)
 				return
 			}
+
+			// if err := p.connection.WriteRTCP(
+			// 	[]rtcp.Packet{&rtcp.ReceiverEstimatedMaximumBitrate{Bitrate: 1500000, SenderSSRC: uint32(remoteTrack.SSRC())}},
+			// ); err != nil {
+			// 	fmt.Printf("onTrack send REMB error: %v\n", err)
+			// 	return
+			// }
 		}
 	}()
 
@@ -353,18 +362,18 @@ func (p *peer) createLocalAudioTrackForwarding(remoteTrack *webrtc.TrackRemote) 
 func (p *peer) forwardPacketsToLocalTrack(remoteTrack *webrtc.TrackRemote, localTrack *webrtc.TrackLocalStaticRTP) error {
 	log.Printf("forwardPacketsToLocalTrack: %s", remoteTrack.Kind().String())
 
-	for rtpBuf := make([]byte, mtu); ; {
+	for {
 		// if !p.streamingAllowed {
 		// 	time.Sleep(100 * time.Millisecond)
 		// 	continue
 		// }
-		i, _, err := remoteTrack.Read(rtpBuf)
+		p, _, err := remoteTrack.ReadRTP()
 		if err != nil {
 			return err
 		}
 
 		// ErrClosedPipe means we don't have any subscribers, this is ok if no peers have connected yet
-		if _, err = localTrack.Write(rtpBuf[:i]); err != nil && !errors.Is(err, io.ErrClosedPipe) {
+		if err = localTrack.WriteRTP(p); err != nil && !errors.Is(err, io.ErrClosedPipe) {
 			return err
 		}
 	}

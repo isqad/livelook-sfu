@@ -24,7 +24,7 @@ const (
 
 type Session struct {
 	ID            int64                      `json:"id,omitempty" db:"id"`
-	UserID        string                     `json:"user_id" db:"user_id"`
+	UserID        UserSessionID              `json:"user_id" db:"user_id"`
 	Title         string                     `json:"title" db:"title"`
 	CreatedAt     time.Time                  `json:"created_at,omitempty" db:"created_at"`
 	UpdatedAt     time.Time                  `json:"updated_at,omitempty" db:"updated_at"`

@@ -36,7 +36,7 @@ func SessionCreateHandler(
 		sessionReq.UserID = user.ID
 
 		msg := eventbus.ServerMessage{
-			UserID: user.ID,
+			UserID: core.UserSessionID(user.ID),
 			Rpc:    eventbus.NewCreateSessionRpc(sessionReq),
 		}
 

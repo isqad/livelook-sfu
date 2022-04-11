@@ -28,7 +28,7 @@ func WebsocketsHandler(
 			return
 		}
 
-		subscription, err := eventsSubscriber.SubscribeClient(user.ID)
+		subscription, err := eventsSubscriber.SubscribeClient(core.UserSessionID(user.ID))
 		if err != nil {
 			log.Printf("can't subscribe the user to signaling channel: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -96,7 +96,6 @@ func HandleMessage(eventsPublisher eventbus.Publisher) func(s *melody.Session, m
 			log.Printf("extract user error: %v", err)
 			return
 		}
-		log.Printf("got message")
 
 		reader := bytes.NewReader(msg)
 		rpc, err := eventbus.RpcFromReader(reader)

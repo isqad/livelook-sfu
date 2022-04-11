@@ -11,8 +11,8 @@ const (
 
 type SessionsDBStorer interface {
 	Save(*Session) (*Session, error)
-	SetOnline(userID string) error
-	SetOffline(userID string) error
+	SetOnline(userID UserSessionID) error
+	SetOffline(userID UserSessionID) error
 }
 
 type StreamsRepository interface {
@@ -88,7 +88,7 @@ func (r *SessionsRepository) Save(session *Session) (*Session, error) {
 	return session, nil
 }
 
-func (r *SessionsRepository) SetOnline(userID string) error {
+func (r *SessionsRepository) SetOnline(userID UserSessionID) error {
 	_, err := r.db.Exec(`UPDATE sessions SET is_online = true, updated_at = NOW() WHERE user_id = $1`,
 		userID,
 	)
@@ -99,7 +99,7 @@ func (r *SessionsRepository) SetOnline(userID string) error {
 	return nil
 }
 
-func (r *SessionsRepository) SetOffline(userID string) error {
+func (r *SessionsRepository) SetOffline(userID UserSessionID) error {
 	_, err := r.db.Exec(
 		`UPDATE sessions SET
 			updated_at = NOW(),

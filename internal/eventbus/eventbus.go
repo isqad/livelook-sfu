@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/isqad/livelook-sfu/internal/core"
 )
 
 type Channel string
@@ -14,22 +15,22 @@ const (
 	ServerMessages Channel = "server_messages"
 )
 
-func (c Channel) buildChannel(userID string) string {
-	return string(c) + ":" + userID
+func (c Channel) buildChannel(userID core.UserSessionID) string {
+	return string(c) + ":" + string(userID)
 }
 
 type ServerMessage struct {
-	UserID string `json:"user_id"`
-	Rpc    Rpc    `json:"rpc"`
+	UserID core.UserSessionID `json:"user_id"`
+	Rpc    Rpc                `json:"rpc"`
 }
 
 type Publisher interface {
-	PublishClient(userID string, rpc Rpc) error
+	PublishClient(userID core.UserSessionID, rpc Rpc) error
 	PublishServer(message ServerMessage) error
 }
 
 type Subscriber interface {
-	SubscribeClient(userID string) (*Subscription, error)
+	SubscribeClient(userID core.UserSessionID) (*Subscription, error)
 	SubscribeServer() (*Subscription, error)
 }
 
@@ -54,7 +55,7 @@ func RedisPubSub(rdb *redis.Client) *Eventbus {
 	return &Eventbus{rdb: rdb}
 }
 
-func (e *Eventbus) PublishClient(userID string, rpc Rpc) error {
+func (e *Eventbus) PublishClient(userID core.UserSessionID, rpc Rpc) error {
 	msg, err := rpc.ToJSON()
 	if err != nil {
 		return err
@@ -70,7 +71,7 @@ func (e *Eventbus) PublishServer(message ServerMessage) error {
 	return e.rdb.Publish(context.Background(), string(ServerMessages), msg).Err()
 }
 
-func (e *Eventbus) SubscribeClient(userID string) (*Subscription, error) {
+func (e *Eventbus) SubscribeClient(userID core.UserSessionID) (*Subscription, error) {
 	ctx := context.Background()
 	// Subscribe user to messages
 	pubsub := e.rdb.Subscribe(ctx, ClientMessages.buildChannel(userID))
