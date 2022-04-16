@@ -10,7 +10,7 @@ require (
 	github.com/isqad/firebase-auth-service v0.0.2
 	github.com/isqad/melody v0.0.0-20200429135154-b03b96e6f3bf
 	github.com/jackc/pgx/v4 v4.15.0
-	github.com/jmoiron/sqlx v1.3.4
+	github.com/jmoiron/sqlx v1.3.5
 	github.com/pion/rtcp v1.2.9
 	github.com/pion/webrtc/v3 v3.1.28
 	github.com/stretchr/testify v1.7.1
