@@ -12,7 +12,7 @@ require (
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/pion/rtcp v1.2.9
-	github.com/pion/webrtc/v3 v3.1.28
+	github.com/pion/webrtc/v3 v3.1.29
 	github.com/stretchr/testify v1.7.1
 	google.golang.org/grpc v1.45.0
 )
@@ -51,7 +51,7 @@ require (
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/mdns v0.0.5 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
-	github.com/pion/rtp v1.7.12 // indirect
+	github.com/pion/rtp v1.7.13 // indirect
 	github.com/pion/sctp v1.8.2 // indirect
 	github.com/pion/sdp/v3 v3.0.4 // indirect
 	github.com/pion/srtp/v2 v2.0.5 // indirect
