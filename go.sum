@@ -457,6 +457,8 @@ github.com/pion/webrtc/v3 v3.1.28 h1:cNUENLrHmY3PWO9na3RGrhnSjzPLQyXRVRDREC7a5Ug
 github.com/pion/webrtc/v3 v3.1.28/go.mod h1:MKhUmhMsy0NZuLpZkEvTg7tcn9HBHZO39Mh2+VDj67g=
 github.com/pion/webrtc/v3 v3.1.29 h1:X/2LbFzBhU2h335azBGmdmrRZIChWTePrg4rwIw91ko=
 github.com/pion/webrtc/v3 v3.1.29/go.mod h1:bcD6vrgcflr6lkf3E8VEqnQT7Uf7y1AxcdUWYGKER1w=
+github.com/pion/webrtc/v3 v3.1.31 h1:lR/EIm8z7RGJaVJ7LcGdGxDrjNRyTAjg8YbASt4EYRU=
+github.com/pion/webrtc/v3 v3.1.31/go.mod h1:bcD6vrgcflr6lkf3E8VEqnQT7Uf7y1AxcdUWYGKER1w=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
