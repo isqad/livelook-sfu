@@ -12,7 +12,7 @@ require (
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/pion/rtcp v1.2.9
-	github.com/pion/webrtc/v3 v3.1.31
+	github.com/pion/webrtc/v3 v3.1.33
 	github.com/stretchr/testify v1.7.1
 	google.golang.org/grpc v1.45.0
 )
@@ -48,7 +48,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.0-beta.8 // indirect
 	github.com/pion/datachannel v1.5.2 // indirect
 	github.com/pion/dtls/v2 v2.1.3 // indirect
-	github.com/pion/ice/v2 v2.2.3 // indirect
+	github.com/pion/ice/v2 v2.2.5 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/mdns v0.0.5 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
