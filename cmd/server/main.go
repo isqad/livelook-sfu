@@ -15,6 +15,7 @@ import (
 
 	"github.com/isqad/livelook-sfu/internal/api"
 	"github.com/isqad/livelook-sfu/internal/config"
+	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/livelook-sfu/internal/service"
 
@@ -56,6 +57,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	sessionsStorer := core.NewSessionsRepository(db)
+
 	rdb := redis.NewClient(&redis.Options{
 		Addr: fmt.Sprintf("%s:%s", viper.GetString("redis.host"), viper.GetString("redis.port")),
 		DB:   0,
@@ -64,9 +67,10 @@ func main() {
 
 	apiApp := api.NewApp(
 		api.AppOptions{
-			DB:               db,
-			EventsPublisher:  redisPubSub,
-			EventsSubscriber: redisPubSub,
+			DB:                 db,
+			EventsPublisher:    redisPubSub,
+			EventsSubscriber:   redisPubSub,
+			SessionsRepository: sessionsStorer,
 		},
 	)
 
@@ -75,7 +79,7 @@ func main() {
 		log.Fatal(err)
 	}
 	sfuConfig := config.NewConfig()
-	_, err = service.NewSessionsManager(sfuConfig, sfuRouter, redisPubSub)
+	_, err = service.NewSessionsManager(sfuConfig, sfuRouter, redisPubSub, sessionsStorer)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -12,7 +12,8 @@ import (
 
 var (
 	errConvertIceCandidate  = errors.New("can't convert to ice candidate")
-	errConvertSession       = errors.New("can't convert to session")
+	errConvertOffer         = errors.New("can't convert to offer")
+	errConvertJoin          = errors.New("can't convert to join")
 	errConvertAddRemotePeer = errors.New("can't convert to add_remote_peer rpc")
 	errPeerNotFound         = errors.New("can't find peer")
 	errUndefinedMethod      = errors.New("undefined method")
@@ -24,8 +25,10 @@ type Router struct {
 	EventsSubscriber Subscriber
 	subscription     *Subscription
 
-	onAddICECandidate       func(core.UserSessionID, *webrtc.ICECandidateInit) error
-	onCreateOrUpdateSession func(core.UserSessionID, *core.Session) error
+	onAddICECandidate func(core.UserSessionID, *webrtc.ICECandidateInit) error
+	onOffer           func(core.UserSessionID, *webrtc.SessionDescription) error
+	onJoin            func(core.UserSessionID) error
+	onCloseSession    func(core.UserSessionID) error
 }
 
 func NewRouter(sub Subscriber) (*Router, error) {
@@ -58,29 +61,39 @@ func (router *Router) Start() {
 
 			switch rpc.GetMethod() {
 			case ICECandidateMethod:
-				_, ok := rpc.(*ICECandidateRpc)
+				msg, ok := rpc.(*ICECandidateRpc)
 				if !ok {
 					log.Printf("router: error: %v", errConvertIceCandidate)
 					continue
 				}
 
-				// if err := router.onAddICECandidate(userID, rpc.Params); err != nil {
-				// 	log.Printf("router: error add ice candidate: %v", err)
-				// }
-			case CreateSessionMethod:
-				rpc, ok := rpc.(*CreateSessionRpc)
+				if err := router.onAddICECandidate(userID, msg.Params); err != nil {
+					log.Printf("router: error add ice candidate: %v", err)
+				}
+			case JoinMethod:
+				_, ok := rpc.(*JoinRpc)
 				if !ok {
-					log.Printf("router: error: %v", errConvertSession)
+					log.Printf("router: error: %v", errConvertJoin)
 					continue
 				}
 
-				if err := router.onCreateOrUpdateSession(userID, rpc.Params); err != nil {
-					log.Printf("router: error save session: %v", err)
+				if err := router.onJoin(userID); err != nil {
+					log.Printf("router: error occured in onJoin: %v", err)
 				}
-			// case CloseSessionMethod:
-			// 	if err := c.closeSessionPeer(userID); err != nil {
-			// 		log.Printf("commutator: error close session: %v", err)
-			// 	}
+			case SDPOfferMethod:
+				msg, ok := rpc.(*SDPRpc)
+				if !ok {
+					log.Printf("router: error: %v", errConvertOffer)
+					continue
+				}
+
+				if err := router.onOffer(userID, msg.Params); err != nil {
+					log.Printf("router: error occured in onOffer: %v", err)
+				}
+			case CloseSessionMethod:
+				if err := router.onCloseSession(userID); err != nil {
+					log.Printf("router: error close session: %v", err)
+				}
 			// case RenegotiationMethod:
 			// 	rpc, ok := rpc.(*eventbus.RenegotiationRpc)
 			// 	if !ok {
@@ -149,6 +162,14 @@ func (router *Router) OnAddICECandidate(callback func(core.UserSessionID, *webrt
 	router.onAddICECandidate = callback
 }
 
-func (router *Router) OnCreateOrUpdateSession(callback func(core.UserSessionID, *core.Session) error) {
-	router.onCreateOrUpdateSession = callback
+func (router *Router) OnJoin(callback func(core.UserSessionID) error) {
+	router.onJoin = callback
+}
+
+func (router *Router) OnOffer(callback func(core.UserSessionID, *webrtc.SessionDescription) error) {
+	router.onOffer = callback
+}
+
+func (router *Router) OnCloseSession(callback func(core.UserSessionID) error) {
+	router.onCloseSession = callback
 }

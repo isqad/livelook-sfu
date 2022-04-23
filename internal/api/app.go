@@ -24,18 +24,17 @@ type ChatRpc struct {
 
 // AppOptions is options of the application
 type AppOptions struct {
-	DB               *sqlx.DB
-	EventsPublisher  eventbus.Publisher
-	EventsSubscriber eventbus.Subscriber
+	DB                 *sqlx.DB
+	EventsPublisher    eventbus.Publisher
+	EventsSubscriber   eventbus.Subscriber
+	SessionsRepository core.SessionsDBStorer
 
 	router         *chi.Mux
 	websocket      *melody.Melody
 	authMiddleware AuthHandler
-
-	sessionsStorage core.SessionsDBStorer
-	userRepository  core.UserStorer
-	cookieStore     *sessions.CookieStore
-	rootURL         string
+	userRepository core.UserStorer
+	cookieStore    *sessions.CookieStore
+	rootURL        string
 }
 
 // App is application for API
@@ -61,7 +60,6 @@ func NewApp(options AppOptions) *App {
 	firebaseAuth.cookieStore = cookieStore
 
 	options.authMiddleware = firebaseAuth.Middleware()
-	options.sessionsStorage = core.NewSessionsRepository(options.DB)
 	options.rootURL = fmt.Sprintf("https://%s:%s", viper.GetString("app.hostname"), viper.GetString("app.port"))
 
 	app := &App{
@@ -141,7 +139,6 @@ func (app *App) Router() http.Handler {
 
 	app.router.With(app.authMiddleware).Route("/api/v1", func(r chi.Router) {
 		r.Get("/ws", WebsocketsHandler(app.EventsSubscriber, app.websocket))
-		r.Post("/session", SessionCreateHandler(app.EventsPublisher))
 		r.Post("/stream", StreamCreateHandler(app.EventsPublisher, app.DB))
 		r.Delete("/stream", StreamDeleteHandler(app.EventsPublisher, app.DB))
 
@@ -226,7 +223,7 @@ func (app *App) Router() http.Handler {
 		})
 	})
 
-	app.websocket.HandleConnect(ConnectHandler)
+	app.websocket.HandleConnect(ConnectHandler(app.EventsPublisher))
 	app.websocket.HandleDisconnect(DisconnectHandler(app.EventsPublisher))
 	app.websocket.HandleMessage(HandleMessage(app.EventsPublisher))
 	app.websocket.HandleError(func(s *melody.Session, e error) {

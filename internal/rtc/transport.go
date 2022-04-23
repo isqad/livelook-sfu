@@ -78,3 +78,39 @@ func newPeerConnection(params TransportParams) (*webrtc.PeerConnection, *webrtc.
 
 	return pc, me, err
 }
+
+func (t *PCTransport) AddICECandidate(candidate *webrtc.ICECandidateInit) error {
+	desc := t.pc.RemoteDescription()
+	if desc != nil {
+		t.pc.AddICECandidate(*candidate)
+		return nil
+	}
+
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	t.pendingCandidates = append(t.pendingCandidates, *candidate)
+
+	return nil
+}
+
+func (t *PCTransport) SetRemoteDescription(sdp webrtc.SessionDescription) error {
+	if err := t.pc.SetRemoteDescription(sdp); err != nil {
+		return err
+	}
+
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	for _, candidate := range t.pendingCandidates {
+		t.pc.AddICECandidate(candidate)
+	}
+
+	t.pendingCandidates = make([]webrtc.ICECandidateInit, 0)
+
+	return nil
+}
+
+func (t *PCTransport) Close() {
+	_ = t.pc.Close()
+}

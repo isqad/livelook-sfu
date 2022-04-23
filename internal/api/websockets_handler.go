@@ -39,7 +39,9 @@ func WebsocketsHandler(
 		sessKeys[wsUserSessionKey] = user
 		sessKeys[wsSubscriptionSessionKey] = subscription
 
-		websocket.HandleRequestWithKeys(w, r, sessKeys)
+		if err := websocket.HandleRequestWithKeys(w, r, sessKeys); err != nil {
+			log.Printf("can't handle request: %v", err)
+		}
 	}
 }
 
@@ -69,24 +71,47 @@ func DisconnectHandler(eventsPublisher eventbus.Publisher) func(session *melody.
 	}
 }
 
-func ConnectHandler(session *melody.Session) {
-	subscription, err := getUserSubscription(session)
-	if err != nil {
-		log.Printf("extract subscription error: %v", err)
-		return
-	}
-
-	go func() {
-		ch := subscription.Channel()
-
-		for msg := range ch {
-			if err := session.Write([]byte(msg.Payload)); err != nil {
-				// there's only session closed error can be
-				log.Printf("ws write error: %v", err)
-				return
-			}
+func ConnectHandler(eventsPublisher eventbus.Publisher) func(session *melody.Session) {
+	return func(session *melody.Session) {
+		subscription, err := getUserSubscription(session)
+		if err != nil {
+			log.Printf("extract subscription error: %v", err)
+			return
 		}
-	}()
+
+		user, err := getUserFromSession(session)
+		if err != nil {
+			log.Printf("extract user error: %v", err)
+			return
+		}
+
+		ready := make(chan struct{})
+
+		go func() {
+			ch := subscription.Channel()
+
+			close(ready)
+			for msg := range ch {
+				if err := session.Write([]byte(msg.Payload)); err != nil {
+					// there's only session closed error can be
+					log.Printf("ws write error: %v", err)
+					return
+				}
+			}
+		}()
+
+		<-ready
+
+		msg := eventbus.ServerMessage{
+			UserID: user.ID,
+			Rpc:    eventbus.NewJoinRpc(),
+		}
+
+		if err := eventsPublisher.PublishServer(msg); err != nil {
+			log.Printf("publishing failed due server error: %v", err)
+			return
+		}
+	}
 }
 
 func HandleMessage(eventsPublisher eventbus.Publisher) func(s *melody.Session, msg []byte) {

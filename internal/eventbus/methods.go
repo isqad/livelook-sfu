@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 
-	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -14,10 +13,11 @@ const jsonRpcVersion = "2.0"
 type Method string
 
 const (
+	JoinMethod          Method = "join"
 	ICECandidateMethod  Method = "iceCandidate"
+	SDPOfferMethod      Method = "offer"
 	SDPAnswerMethod     Method = "answer"
 	RenegotiationMethod Method = "renogotiation"
-	CreateSessionMethod Method = "create_session"
 	CloseSessionMethod  Method = "close_session"
 	StartStreamMethod   Method = "start_stream"
 	StopStreamMethod    Method = "stop_stream"
@@ -72,13 +72,13 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 		}
 
 		return NewSDPAnswerRpc(sdp), nil
-	case CreateSessionMethod:
-		s := &core.Session{}
-		if err := json.Unmarshal(params, s); err != nil {
+	case SDPOfferMethod:
+		sdp := &webrtc.SessionDescription{}
+		if err := json.Unmarshal(params, sdp); err != nil {
 			return nil, err
 		}
 
-		return NewCreateSessionRpc(s), nil
+		return NewSDPOfferRpc(sdp), nil
 	case CloseSessionMethod:
 		return NewCloseSessionRpc(), nil
 	case RenegotiationMethod:
@@ -92,6 +92,8 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 		return NewStartStreamRpc(), nil
 	case StopStreamMethod:
 		return NewStopStreamRpc(), nil
+	case JoinMethod:
+		return NewJoinRpc(), nil
 	case AddRemotePeerMethod:
 		u := make(map[string]string)
 		if err := json.Unmarshal(params, &u); err != nil {
@@ -104,29 +106,6 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 	default:
 		return nil, ErrUnknownRpcType
 	}
-}
-
-type CreateSessionRpc struct {
-	jsonRpcHead
-	Params *core.Session `json:"params"`
-}
-
-func NewCreateSessionRpc(session *core.Session) *CreateSessionRpc {
-	return &CreateSessionRpc{
-		jsonRpcHead: jsonRpcHead{
-			Version: jsonRpcVersion,
-			Method:  CreateSessionMethod,
-		},
-		Params: session,
-	}
-}
-
-func (r CreateSessionRpc) GetMethod() Method {
-	return r.Method
-}
-
-func (r CreateSessionRpc) ToJSON() ([]byte, error) {
-	return json.Marshal(r)
 }
 
 type CloseSessionRpc struct {
@@ -163,6 +142,16 @@ func NewSDPAnswerRpc(sdp *webrtc.SessionDescription) *SDPRpc {
 		jsonRpcHead: jsonRpcHead{
 			Version: jsonRpcVersion,
 			Method:  SDPAnswerMethod,
+		},
+		Params: sdp,
+	}
+}
+
+func NewSDPOfferRpc(sdp *webrtc.SessionDescription) *SDPRpc {
+	return &SDPRpc{
+		jsonRpcHead: jsonRpcHead{
+			Version: jsonRpcVersion,
+			Method:  SDPOfferMethod,
 		},
 		Params: sdp,
 	}
@@ -293,5 +282,30 @@ func (r AddRemotePeerRpc) GetMethod() Method {
 }
 
 func (r AddRemotePeerRpc) ToJSON() ([]byte, error) {
+	return json.Marshal(r)
+}
+
+type JoinRpc struct {
+	jsonRpcHead
+	Params map[string]string `json:"params"`
+}
+
+func NewJoinRpc() *JoinRpc {
+	rpc := &JoinRpc{
+		jsonRpcHead: jsonRpcHead{
+			Version: jsonRpcVersion,
+			Method:  JoinMethod,
+		},
+		Params: nil,
+	}
+
+	return rpc
+}
+
+func (r JoinRpc) GetMethod() Method {
+	return r.Method
+}
+
+func (r JoinRpc) ToJSON() ([]byte, error) {
 	return json.Marshal(r)
 }

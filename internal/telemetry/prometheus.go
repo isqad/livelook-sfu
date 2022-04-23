@@ -5,7 +5,8 @@ import "github.com/prometheus/client_golang/prometheus"
 const livelookNamespace string = "livelook"
 
 var (
-	promSessionTotal prometheus.Gauge
+	promSessionTotal        prometheus.Gauge
+	ServiceOperationCounter *prometheus.CounterVec
 )
 
 func init() {
@@ -15,9 +16,24 @@ func init() {
 		Name:      "total",
 	})
 
+	ServiceOperationCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace:   livelookNamespace,
+			Subsystem:   "node",
+			Name:        "service_operation",
+			ConstLabels: prometheus.Labels{"node_id": "1"},
+		},
+		[]string{"type", "status", "error_type"},
+	)
+
 	prometheus.MustRegister(promSessionTotal)
+	prometheus.MustRegister(ServiceOperationCounter)
 }
 
 func SessionStarted() {
-	promSessionTotal.Add(1)
+	promSessionTotal.Inc()
+}
+
+func SessionStopped() {
+	promSessionTotal.Dec()
 }
