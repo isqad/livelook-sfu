@@ -1,6 +1,8 @@
 package core
 
 import (
+	"database/sql"
+
 	"github.com/jmoiron/sqlx"
 )
 
@@ -13,6 +15,7 @@ type SessionsDBStorer interface {
 	Save(*Session) (*Session, error)
 	SetOnline(userID UserSessionID) error
 	SetOffline(userID UserSessionID) error
+	FindByUserID(userID UserSessionID) (*Session, error)
 }
 
 type StreamsRepository interface {
@@ -136,6 +139,24 @@ func (r *SessionsRepository) Stop(session *Session) (*Session, error) {
 	session.MediaType = nil
 
 	if err := r.SetOffline(session.UserID); err != nil {
+		return nil, err
+	}
+
+	return session, nil
+}
+
+func (r *SessionsRepository) FindByUserID(userID UserSessionID) (*Session, error) {
+	session := &Session{}
+
+	err := r.db.Get(session,
+		`SELECT
+			*
+			FROM sessions
+			WHERE user_id = $1 LIMIT 1`,
+		string(userID),
+	)
+
+	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 

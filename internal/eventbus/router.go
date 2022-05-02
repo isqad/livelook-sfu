@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"log"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/pion/webrtc/v3"
@@ -45,7 +46,7 @@ func NewRouter(sub Subscriber) (*Router, error) {
 }
 
 func (router *Router) Start() {
-	log.Println("start router")
+	log.Debug().Str("service", "router").Msg("start")
 
 	go func() {
 		// If the Go channel
@@ -55,7 +56,7 @@ func (router *Router) Start() {
 		for msg := range channel {
 			userID, rpc, err := parseRpc(msg.Payload)
 			if err != nil {
-				log.Printf("router: error: %v", err)
+				log.Error().Err(err).Str("service", "router").Msg("")
 				continue
 			}
 
@@ -63,36 +64,36 @@ func (router *Router) Start() {
 			case ICECandidateMethod:
 				msg, ok := rpc.(*ICECandidateRpc)
 				if !ok {
-					log.Printf("router: error: %v", errConvertIceCandidate)
+					log.Error().Err(errConvertIceCandidate).Str("service", "router").Msg("")
 					continue
 				}
 
 				if err := router.onAddICECandidate(userID, msg.Params); err != nil {
-					log.Printf("router: error add ice candidate: %v", err)
+					log.Error().Err(err).Str("service", "router").Msg("router: error add ice candidate")
 				}
 			case JoinMethod:
 				_, ok := rpc.(*JoinRpc)
 				if !ok {
-					log.Printf("router: error: %v", errConvertJoin)
+					log.Error().Err(errConvertJoin).Str("service", "router").Msg("")
 					continue
 				}
 
 				if err := router.onJoin(userID); err != nil {
-					log.Printf("router: error occured in onJoin: %v", err)
+					log.Error().Err(err).Str("service", "router").Msg("error occured in onJoin")
 				}
 			case SDPOfferMethod:
 				msg, ok := rpc.(*SDPRpc)
 				if !ok {
-					log.Printf("router: error: %v", errConvertOffer)
+					log.Error().Err(errConvertOffer).Str("service", "router").Msg("")
 					continue
 				}
 
 				if err := router.onOffer(userID, msg.Params); err != nil {
-					log.Printf("router: error occured in onOffer: %v", err)
+					log.Error().Err(err).Str("service", "router").Msg("error occured in onOffer")
 				}
 			case CloseSessionMethod:
 				if err := router.onCloseSession(userID); err != nil {
-					log.Printf("router: error close session: %v", err)
+					log.Error().Err(err).Str("service", "router").Msg("close session error")
 				}
 			// case RenegotiationMethod:
 			// 	rpc, ok := rpc.(*eventbus.RenegotiationRpc)
@@ -123,7 +124,7 @@ func (router *Router) Start() {
 			// 		log.Printf("commutator: error on add remote peer: %v", err)
 			// 	}
 			default:
-				log.Printf("router: error: %v, %v", errUndefinedMethod, rpc.GetMethod())
+				log.Error().Err(errUndefinedMethod).Str("rpcMethod", string(rpc.GetMethod())).Str("service", "router").Msg("")
 			}
 		}
 	}()
@@ -132,27 +133,27 @@ func (router *Router) Start() {
 func parseRpc(payload string) (core.UserSessionID, Rpc, error) {
 	serverMessage := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(payload), &serverMessage); err != nil {
-		log.Printf("router: error: %v", err)
+		log.Error().Err(err).Str("service", "router").Msg("")
 		return "", nil, err
 	}
 
 	strUserID, ok := serverMessage["user_id"].(string)
 	if !ok {
 		err := errors.New("can't get user id")
-		log.Printf("router: error: %v", err)
-		return "", nil, err
+		log.Error().Interface("serverMessage", serverMessage).Str("service", "router").Err(err).Msg("")
+		return "", nil, errors.New("can't get user id")
 	}
 
 	rawRpc, err := json.Marshal(serverMessage["rpc"])
 	if err != nil {
-		log.Printf("router: error: %v", err)
+		log.Error().Err(err).Str("service", "router").Msg("")
 		return "", nil, err
 	}
 
 	reader := bytes.NewReader(rawRpc)
 	rpc, err := RpcFromReader(reader)
 	if err != nil {
-		log.Printf("router: error: %v", err)
+		log.Error().Err(err).Str("service", "router").Msg("")
 		return "", nil, err
 	}
 	return core.UserSessionID(strUserID), rpc, nil

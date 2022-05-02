@@ -1,7 +1,7 @@
 package rtc
 
 import (
-	"log"
+	"github.com/rs/zerolog/log"
 
 	"github.com/isqad/livelook-sfu/internal/config"
 	"github.com/isqad/livelook-sfu/internal/core"
@@ -45,10 +45,10 @@ func NewParticipant(
 	}
 
 	p.publisher.pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
-		log.Printf("publisher: new ICE candidate: %v", candidate)
+		log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Interface("candidate", candidate).Msg("send ICE candidate")
 
 		if err := p.sendICECandidate(candidate); err != nil {
-			log.Printf("publisher: error on send ICE candidate %v", err)
+			log.Error().Err(err).Str("service", "participant").Str("ID", string(p.ID)).Msg("error on send ICE candidate")
 		}
 	})
 	p.publisher.pc.OnConnectionStateChange(p.handlePrimaryStateChange)
@@ -78,7 +78,7 @@ func (p *Participant) sendICECandidate(candidate *webrtc.ICECandidate) error {
 }
 
 func (p *Participant) HandleOffer(sdp webrtc.SessionDescription) error {
-	log.Println("handle offer")
+	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Interface("sdp", sdp).Msg("handle offer")
 
 	if err := p.publisher.SetRemoteDescription(sdp); err != nil {
 		return err
@@ -89,7 +89,7 @@ func (p *Participant) HandleOffer(sdp webrtc.SessionDescription) error {
 		return err
 	}
 
-	log.Printf("answer: %v", answer)
+	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Interface("sdp", answer).Msg("created answer")
 
 	err = p.publisher.pc.SetLocalDescription(answer)
 	if err != nil {
@@ -97,12 +97,16 @@ func (p *Participant) HandleOffer(sdp webrtc.SessionDescription) error {
 	}
 
 	rpc := eventbus.NewSDPAnswerRpc(p.publisher.pc.LocalDescription())
-	p.sink.PublishClient(p.ID, rpc)
+	if err := p.sink.PublishClient(p.ID, rpc); err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func (p *Participant) handlePrimaryStateChange(state webrtc.PeerConnectionState) {
+	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Interface("state", state).Msg("connection state changed")
+
 	if state == webrtc.PeerConnectionStateConnected {
 		telemetry.ServiceOperationCounter.WithLabelValues("ice_connection", "success", "").Add(1)
 	} else if state == webrtc.PeerConnectionStateFailed {
@@ -131,13 +135,13 @@ func (p *Participant) onDataChannel(dc *webrtc.DataChannel) {
 	// 		}
 	// 	})
 	default:
-		log.Println("unsupported datachannel added", nil, "label", dc.Label())
+		log.Error().Str("service", "participant").Str("ID", string(p.ID)).Str("label", dc.Label()).Msg("unsupported datachannel added")
 	}
 }
 
 // when a new remoteTrack is created, creates a Track and adds it to room
 func (p *Participant) onMediaTrack(track *webrtc.TrackRemote, rtpReceiver *webrtc.RTPReceiver) {
-	log.Println("On media track")
+	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Msg("on media track")
 	// if p.State() == livekit.ParticipantInfo_DISCONNECTED {
 	// 	return
 	// }

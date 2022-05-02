@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/sessions"
@@ -76,6 +77,7 @@ func (app *App) Router() http.Handler {
 			"web/templates/admin/login/index.html",
 		)
 		if err != nil {
+			log.Error().Err(err).Str("service", "web").Msg("")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -98,7 +100,8 @@ func (app *App) Router() http.Handler {
 				"web/templates/admin/login/index.html",
 			)
 			if err != nil {
-				w.WriteHeader(http.StatusUnauthorized)
+				log.Error().Err(err).Str("service", "web").Msg("")
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
@@ -109,7 +112,7 @@ func (app *App) Router() http.Handler {
 		session, _ := app.cookieStore.Get(r, core.AdminSessionNameKey)
 		session.Values["id"] = user.ID
 		if err := session.Save(r, w); err != nil {
-			log.Printf("error: %v", err)
+			log.Error().Err(err).Str("service", "web").Msg("")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -130,7 +133,9 @@ func (app *App) Router() http.Handler {
 				"web/templates/admin/root/index.html",
 			)
 			if err != nil {
-				log.Fatal(err)
+				log.Error().Err(err).Str("service", "web").Msg("")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
 
 			tmpl.ExecuteTemplate(w, "layout.html", nil)
@@ -139,7 +144,7 @@ func (app *App) Router() http.Handler {
 
 	app.router.With(app.authMiddleware).Route("/api/v1", func(r chi.Router) {
 		r.Get("/ws", WebsocketsHandler(app.EventsSubscriber, app.websocket))
-		r.Post("/stream", StreamCreateHandler(app.EventsPublisher, app.DB))
+		r.Post("/stream", StreamCreateHandler(app.SessionsRepository, app.DB))
 		r.Delete("/stream", StreamDeleteHandler(app.EventsPublisher, app.DB))
 
 		r.Get("/streams", StreamListHandler(app.DB))
@@ -148,18 +153,18 @@ func (app *App) Router() http.Handler {
 			user := core.NewUser()
 			err := json.NewDecoder(r.Body).Decode(user)
 			if err != nil {
-				log.Println(err)
+				log.Error().Err(err).Str("service", "web").Msg("")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 			if err := user.Save(app.DB); err != nil {
-				log.Println(err)
+				log.Error().Err(err).Str("service", "web").Msg("")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
 			if err := json.NewEncoder(w).Encode(user); err != nil {
-				log.Println(err)
+				log.Error().Err(err).Str("service", "web").Msg("")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -169,14 +174,14 @@ func (app *App) Router() http.Handler {
 		r.Post("/profile/images", func(w http.ResponseWriter, request *http.Request) {
 			user, err := userFromRequest(request)
 			if err != nil {
-				log.Println("can't get user ID from request context")
+				log.Error().Err(err).Str("service", "web").Msg("can't get user ID from request context")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 			image := core.NewUserProfileImage(user.ID, viper.GetString("app.upload_root"))
 			imageStorer := core.NewUserProfileImageDbStorer(app.DB)
 			if err := image.UploadHandle(request, imageStorer); err != nil {
-				log.Printf("can't upload file: %+v", err)
+				log.Error().Err(err).Str("service", "web").Msg("can't upload file")
 				w.WriteHeader(http.StatusUnprocessableEntity)
 				return
 			}
@@ -210,13 +215,13 @@ func (app *App) Router() http.Handler {
 		r.Get("/current_user", func(w http.ResponseWriter, request *http.Request) {
 			user, err := userFromRequest(request)
 			if err != nil {
-				log.Printf("can't get user ID from request context: %v", err)
+				log.Error().Err(err).Str("service", "web").Msg("can't get user ID from request context")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
 			if err := json.NewEncoder(w).Encode(user); err != nil {
-				log.Println(err)
+				log.Error().Err(err).Msg("")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -226,8 +231,8 @@ func (app *App) Router() http.Handler {
 	app.websocket.HandleConnect(ConnectHandler(app.EventsPublisher))
 	app.websocket.HandleDisconnect(DisconnectHandler(app.EventsPublisher))
 	app.websocket.HandleMessage(HandleMessage(app.EventsPublisher))
-	app.websocket.HandleError(func(s *melody.Session, e error) {
-		log.Printf("error in websocket session: %v", e)
+	app.websocket.HandleError(func(s *melody.Session, err error) {
+		log.Error().Err(err).Str("service", "web").Msg("error in websocket session")
 	})
 
 	return app.router

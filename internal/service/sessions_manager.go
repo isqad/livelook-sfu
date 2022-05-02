@@ -2,8 +2,9 @@ package service
 
 import (
 	"errors"
-	"log"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/isqad/livelook-sfu/internal/config"
 	"github.com/isqad/livelook-sfu/internal/core"
@@ -59,7 +60,7 @@ func NewSessionsManager(
 }
 
 func (s *SessionsManager) StartSession(userID core.UserSessionID) error {
-	log.Println("received message to start session")
+	log.Debug().Str("service", "sessionsManager").Str("UserID", string(userID)).Msg("received message to start session")
 
 	session := &core.Session{
 		UserID: userID,
@@ -93,8 +94,11 @@ func (s *SessionsManager) StartSession(userID core.UserSessionID) error {
 }
 
 func (s *SessionsManager) HandleOffer(userID core.UserSessionID, sdp *webrtc.SessionDescription) error {
+	log.Debug().Str("service", "sessionsManager").Str("UserID", string(userID)).Msg("handle offer")
+
 	room, err := s.findRoom(userID)
 	if err != nil {
+		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("room not found")
 		return err
 	}
 
@@ -102,8 +106,11 @@ func (s *SessionsManager) HandleOffer(userID core.UserSessionID, sdp *webrtc.Ses
 }
 
 func (s *SessionsManager) AddICECandidate(userID core.UserSessionID, candidate *webrtc.ICECandidateInit) error {
+	log.Debug().Str("service", "sessionsManager").Interface("candidate", candidate).Str("UserID", string(userID)).Msg("add ICE candidate")
+
 	room, err := s.findRoom(userID)
 	if err != nil {
+		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("room not found")
 		return err
 	}
 
@@ -111,19 +118,22 @@ func (s *SessionsManager) AddICECandidate(userID core.UserSessionID, candidate *
 }
 
 func (s *SessionsManager) CloseSession(userID core.UserSessionID) error {
+	log.Debug().Str("service", "sessionsManager").Str("UserID", string(userID)).Msg("close session")
+
 	room, err := s.findRoom(userID)
 	if err != nil {
+		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("room not found")
 		return err
 	}
 
 	if err := room.Close(); err != nil {
 		telemetry.ServiceOperationCounter.WithLabelValues("sessions", "error", "close").Add(1)
-		log.Printf("close session error: %v", err)
+		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("close session error")
 	}
 
 	if err := s.sessionsRepository.SetOffline(userID); err != nil {
 		telemetry.ServiceOperationCounter.WithLabelValues("database", "error", "session_set_offline").Add(1)
-		log.Printf("set offline errored: %v", err)
+		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("set offline errored")
 	}
 
 	s.lock.Lock()

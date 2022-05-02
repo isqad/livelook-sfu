@@ -1,9 +1,10 @@
 package rtc
 
 import (
-	"log"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/isqad/livelook-sfu/internal/config"
 	"github.com/pion/webrtc/v3"
@@ -45,7 +46,7 @@ func NewPCTransport(params TransportParams) (*PCTransport, error) {
 
 	t.pc.OnICEGatheringStateChange(func(state webrtc.ICEGathererState) {
 		if state == webrtc.ICEGathererStateComplete {
-			log.Println("OnICEGatheringStateChange: complete")
+			log.Debug().Str("service", "pcTransport").Msg("OnICEGatheringStateChange: complete")
 		}
 	})
 
@@ -53,11 +54,11 @@ func NewPCTransport(params TransportParams) (*PCTransport, error) {
 }
 
 func newPeerConnection(params TransportParams) (*webrtc.PeerConnection, *webrtc.MediaEngine, error) {
-	log.Println("create new peer connection")
+	log.Debug().Str("service", "pcTransport").Msg("create new peer connection")
 
 	me, err := createMediaEngine(params.EnabledCodecs, params.Config.Publisher)
 	if err != nil {
-		log.Printf("newPeerConnection: %v", err)
+		log.Error().Err(err).Str("service", "pcTransport").Msg("")
 		return nil, nil, err
 	}
 

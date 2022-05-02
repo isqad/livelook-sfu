@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path"
@@ -11,6 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 
 	"github.com/isqad/livelook-sfu/internal/api"
@@ -27,10 +28,20 @@ import (
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
 
+const (
+	developmentEnv = "development"
+)
+
 func main() {
 	appEnv := os.Getenv("APP_ENV")
 	if appEnv == "" {
-		appEnv = "development"
+		appEnv = developmentEnv
+	}
+
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	if appEnv == developmentEnv {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
 	viper.SetConfigName("config." + appEnv)
@@ -38,7 +49,7 @@ func main() {
 	viper.AddConfigPath("./configs")
 	err := viper.ReadInConfig()
 	if err != nil {
-		log.Fatalf("can not read config file: %v", err)
+		log.Fatal().Err(err).Msg("can not read config file")
 	}
 
 	dataSrcName := fmt.Sprintf(
@@ -51,10 +62,10 @@ func main() {
 	)
 	db, err := sqlx.Connect("pgx", dataSrcName)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("")
 	}
 	if err = db.Ping(); err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("")
 	}
 
 	sessionsStorer := core.NewSessionsRepository(db)
@@ -76,19 +87,19 @@ func main() {
 
 	sfuRouter, err := eventbus.NewRouter(redisPubSub)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("")
 	}
 	sfuConfig := config.NewConfig()
 	_, err = service.NewSessionsManager(sfuConfig, sfuRouter, redisPubSub, sessionsStorer)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("")
 	}
 
 	sfuRouter.Start()
 
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	r.Use(api.LoggerMiddleware(&log.Logger))
 	r.Use(middleware.Recoverer)
 
 	// Mount API
@@ -100,7 +111,7 @@ func main() {
 			"web/templates/index.html",
 		)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("")
 		}
 
 		tmpl.ExecuteTemplate(w, "layout.html", nil)
@@ -112,7 +123,7 @@ func main() {
 			"web/templates/broadcasts/index.html",
 		)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("")
 		}
 
 		tmpl.ExecuteTemplate(w, "layout.html", nil)
@@ -126,7 +137,7 @@ func main() {
 			"web/templates/broadcasts/show.html",
 		)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("")
 		}
 
 		tmpl.ExecuteTemplate(w, "layout.html", struct{ ID string }{broadcastID})
@@ -136,7 +147,7 @@ func main() {
 	// serves files from web/static dir
 	cwd, err := os.Getwd()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("")
 	}
 	staticPrefix := "/static/"
 	staticDir := path.Join(cwd, "web", staticPrefix)
@@ -155,6 +166,6 @@ func main() {
 	err = server.ListenAndServeTLS("configs/certs/cert.pem", "configs/certs/key.pem")
 
 	if err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Server has been closed immediatelly: %v\n", err)
+		log.Fatal().Err(err).Msg("server has been closed immediatelly")
 	}
 }
