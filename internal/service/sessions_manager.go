@@ -9,6 +9,7 @@ import (
 	"github.com/isqad/livelook-sfu/internal/config"
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
+	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
 	"github.com/isqad/livelook-sfu/internal/rtc"
 	"github.com/isqad/livelook-sfu/internal/telemetry"
 	"github.com/pion/webrtc/v3"
@@ -55,6 +56,8 @@ func NewSessionsManager(
 	router.OnOffer(s.HandleOffer)
 	router.OnAddICECandidate(s.AddICECandidate)
 	router.OnCloseSession(s.CloseSession)
+	router.OnPublishStream(s.PublishStream)
+	router.OnStopStream(s.StopStream)
 
 	return s, nil
 }
@@ -83,7 +86,7 @@ func (s *SessionsManager) StartSession(userID core.UserSessionID) error {
 	room.Join(participant)
 
 	// Send Join RPC
-	msg := eventbus.NewJoinRpc()
+	msg := rpc.NewJoinRpc()
 	if err := s.rpcSink.PublishClient(userID, msg); err != nil {
 		return err
 	}
@@ -141,6 +144,50 @@ func (s *SessionsManager) CloseSession(userID core.UserSessionID) error {
 	s.lock.Unlock()
 
 	telemetry.SessionStopped()
+
+	return nil
+}
+
+func (s *SessionsManager) PublishStream(userID core.UserSessionID) error {
+	log.Debug().Str("service", "sessionsManager").Str("UserID", string(userID)).Msg("publish stream")
+
+	room, err := s.findRoom(userID)
+	if err != nil {
+		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("room not found")
+		return err
+	}
+
+	if err := s.sessionsRepository.StartPublish(userID); err != nil {
+		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("can't publish")
+		return err
+	}
+
+	if err := room.PublishStream(userID); err != nil {
+		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("publishing error")
+		return err
+	}
+
+	return nil
+}
+
+func (s *SessionsManager) StopStream(userID core.UserSessionID) error {
+	log.Debug().Str("service", "sessionsManager").Str("UserID", string(userID)).Msg("stop stream")
+
+	room, err := s.findRoom(userID)
+	if err != nil {
+		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("room not found")
+		return err
+	}
+
+	if err := s.sessionsRepository.StopPublish(userID); err != nil {
+		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("can't stop stream")
+		return err
+	}
+
+	if err := room.StopStream(userID); err != nil {
+		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("stop stream error")
+		return err
+	}
 
 	return nil
 }

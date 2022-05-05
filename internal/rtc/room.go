@@ -69,6 +69,15 @@ func (r *Room) AddICECandidate(userID core.UserSessionID, candidate *webrtc.ICEC
 	return participant.AddICECandidate(candidate)
 }
 
+func (r *Room) PublishStream(userID core.UserSessionID) error {
+	return nil
+}
+
+// StopStream sends messages to participants about stop host's stream
+func (r *Room) StopStream(userID core.UserSessionID) error {
+	return nil
+}
+
 func (r *Room) Close() error {
 	r.lock.Lock()
 	defer r.lock.Unlock()

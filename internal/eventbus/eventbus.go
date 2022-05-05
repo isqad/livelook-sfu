@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/isqad/livelook-sfu/internal/core"
+	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
 )
 
 type Channel string
@@ -21,11 +22,11 @@ func (c Channel) buildChannel(userID core.UserSessionID) string {
 
 type ServerMessage struct {
 	UserID core.UserSessionID `json:"user_id"`
-	Rpc    Rpc                `json:"rpc"`
+	Rpc    rpc.Rpc            `json:"rpc"`
 }
 
 type Publisher interface {
-	PublishClient(userID core.UserSessionID, rpc Rpc) error
+	PublishClient(userID core.UserSessionID, rpc rpc.Rpc) error
 	PublishServer(message ServerMessage) error
 }
 
@@ -55,8 +56,8 @@ func RedisPubSub(rdb *redis.Client) *Eventbus {
 	return &Eventbus{rdb: rdb}
 }
 
-func (e *Eventbus) PublishClient(userID core.UserSessionID, rpc Rpc) error {
-	msg, err := rpc.ToJSON()
+func (e *Eventbus) PublishClient(userID core.UserSessionID, r rpc.Rpc) error {
+	msg, err := r.ToJSON()
 	if err != nil {
 		return err
 	}

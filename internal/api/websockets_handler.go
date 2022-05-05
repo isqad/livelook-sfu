@@ -8,6 +8,7 @@ import (
 
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
+	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
 	"github.com/isqad/melody"
 )
 
@@ -55,7 +56,7 @@ func DisconnectHandler(eventsPublisher eventbus.Publisher) func(session *melody.
 			return
 		}
 
-		rpc := eventbus.NewCloseSessionRpc()
+		rpc := rpc.NewCloseSessionRpc()
 		if err := eventsPublisher.PublishServer(eventbus.ServerMessage{UserID: user.ID, Rpc: rpc}); err != nil {
 			log.Printf("publish server rpc error: %v", err)
 		}
@@ -104,7 +105,7 @@ func ConnectHandler(eventsPublisher eventbus.Publisher) func(session *melody.Ses
 
 		msg := eventbus.ServerMessage{
 			UserID: user.ID,
-			Rpc:    eventbus.NewJoinRpc(),
+			Rpc:    rpc.NewJoinRpc(),
 		}
 
 		if err := eventsPublisher.PublishServer(msg); err != nil {
@@ -123,7 +124,7 @@ func HandleMessage(eventsPublisher eventbus.Publisher) func(s *melody.Session, m
 		}
 
 		reader := bytes.NewReader(msg)
-		rpc, err := eventbus.RpcFromReader(reader)
+		rpc, err := rpc.RpcFromReader(reader)
 		if err != nil {
 			log.Printf("rpc parse error: %v", err)
 			return

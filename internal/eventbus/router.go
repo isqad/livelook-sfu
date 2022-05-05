@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/isqad/livelook-sfu/internal/core"
+	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -30,6 +31,8 @@ type Router struct {
 	onOffer           func(core.UserSessionID, *webrtc.SessionDescription) error
 	onJoin            func(core.UserSessionID) error
 	onCloseSession    func(core.UserSessionID) error
+	onPublishStream   func(core.UserSessionID) error
+	onStopStream      func(core.UserSessionID) error
 }
 
 func NewRouter(sub Subscriber) (*Router, error) {
@@ -54,15 +57,15 @@ func (router *Router) Start() {
 		channel := router.subscription.Channel()
 
 		for msg := range channel {
-			userID, rpc, err := parseRpc(msg.Payload)
+			userID, r, err := parseRpc(msg.Payload)
 			if err != nil {
 				log.Error().Err(err).Str("service", "router").Msg("")
 				continue
 			}
 
-			switch rpc.GetMethod() {
-			case ICECandidateMethod:
-				msg, ok := rpc.(*ICECandidateRpc)
+			switch r.GetMethod() {
+			case rpc.ICECandidateMethod:
+				msg, ok := r.(*rpc.ICECandidateRpc)
 				if !ok {
 					log.Error().Err(errConvertIceCandidate).Str("service", "router").Msg("")
 					continue
@@ -71,8 +74,8 @@ func (router *Router) Start() {
 				if err := router.onAddICECandidate(userID, msg.Params); err != nil {
 					log.Error().Err(err).Str("service", "router").Msg("router: error add ice candidate")
 				}
-			case JoinMethod:
-				_, ok := rpc.(*JoinRpc)
+			case rpc.JoinMethod:
+				_, ok := r.(*rpc.JoinRpc)
 				if !ok {
 					log.Error().Err(errConvertJoin).Str("service", "router").Msg("")
 					continue
@@ -81,8 +84,8 @@ func (router *Router) Start() {
 				if err := router.onJoin(userID); err != nil {
 					log.Error().Err(err).Str("service", "router").Msg("error occured in onJoin")
 				}
-			case SDPOfferMethod:
-				msg, ok := rpc.(*SDPRpc)
+			case rpc.SDPOfferMethod:
+				msg, ok := r.(*rpc.SDPRpc)
 				if !ok {
 					log.Error().Err(errConvertOffer).Str("service", "router").Msg("")
 					continue
@@ -91,28 +94,18 @@ func (router *Router) Start() {
 				if err := router.onOffer(userID, msg.Params); err != nil {
 					log.Error().Err(err).Str("service", "router").Msg("error occured in onOffer")
 				}
-			case CloseSessionMethod:
+			case rpc.CloseSessionMethod:
 				if err := router.onCloseSession(userID); err != nil {
 					log.Error().Err(err).Str("service", "router").Msg("close session error")
 				}
-			// case RenegotiationMethod:
-			// 	rpc, ok := rpc.(*eventbus.RenegotiationRpc)
-			// 	if !ok {
-			// 		log.Printf("commutator: error: %v", errConvertSession)
-			// 		continue
-			// 	}
-
-			// 	if err := c.renogotiation(userID, rpc.Params); err != nil {
-			// 		log.Printf("commutator: renegotiation error: %v", err)
-			// 	}
-			// case StartStreamMethod:
-			// 	if err := c.allowStreaming(userID); err != nil {
-			// 		log.Printf("commutator: error allowing streaming: %v", err)
-			// 	}
-			// case StopStreamMethod:
-			// 	if err := c.disallowStreaming(userID); err != nil {
-			// 		log.Printf("commutator: error disallowing streaming: %v", err)
-			// 	}
+			case rpc.StartStreamMethod:
+				if err := router.onPublishStream(userID); err != nil {
+					log.Error().Err(err).Str("service", "router").Msg("publish stream error")
+				}
+			case rpc.StopStreamMethod:
+				if err := router.onStopStream(userID); err != nil {
+					log.Error().Err(err).Str("service", "router").Msg("stop stream error")
+				}
 			// case AddRemotePeerMethod:
 			// 	rpc, ok := rpc.(*AddRemotePeerRpc)
 			// 	if !ok {
@@ -124,13 +117,13 @@ func (router *Router) Start() {
 			// 		log.Printf("commutator: error on add remote peer: %v", err)
 			// 	}
 			default:
-				log.Error().Err(errUndefinedMethod).Str("rpcMethod", string(rpc.GetMethod())).Str("service", "router").Msg("")
+				log.Error().Err(errUndefinedMethod).Str("rpcMethod", string(r.GetMethod())).Str("service", "router").Msg("")
 			}
 		}
 	}()
 }
 
-func parseRpc(payload string) (core.UserSessionID, Rpc, error) {
+func parseRpc(payload string) (core.UserSessionID, rpc.Rpc, error) {
 	serverMessage := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(payload), &serverMessage); err != nil {
 		log.Error().Err(err).Str("service", "router").Msg("")
@@ -151,7 +144,7 @@ func parseRpc(payload string) (core.UserSessionID, Rpc, error) {
 	}
 
 	reader := bytes.NewReader(rawRpc)
-	rpc, err := RpcFromReader(reader)
+	rpc, err := rpc.RpcFromReader(reader)
 	if err != nil {
 		log.Error().Err(err).Str("service", "router").Msg("")
 		return "", nil, err
@@ -173,4 +166,12 @@ func (router *Router) OnOffer(callback func(core.UserSessionID, *webrtc.SessionD
 
 func (router *Router) OnCloseSession(callback func(core.UserSessionID) error) {
 	router.onCloseSession = callback
+}
+
+func (router *Router) OnPublishStream(callback func(core.UserSessionID) error) {
+	router.onPublishStream = callback
+}
+
+func (router *Router) OnStopStream(callback func(core.UserSessionID) error) {
+	router.onStopStream = callback
 }

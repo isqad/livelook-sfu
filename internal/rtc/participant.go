@@ -3,6 +3,8 @@ package rtc
 import (
 	"github.com/rs/zerolog/log"
 
+	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
+
 	"github.com/isqad/livelook-sfu/internal/config"
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
@@ -68,7 +70,7 @@ func (p *Participant) sendICECandidate(candidate *webrtc.ICECandidate) error {
 	}
 
 	candidateInit := candidate.ToJSON()
-	rpc := eventbus.NewICECandidateRpc(&candidateInit)
+	rpc := rpc.NewICECandidateRpc(&candidateInit)
 
 	if err := p.sink.PublishClient(p.ID, rpc); err != nil {
 		return err
@@ -96,7 +98,7 @@ func (p *Participant) HandleOffer(sdp webrtc.SessionDescription) error {
 		return err
 	}
 
-	rpc := eventbus.NewSDPAnswerRpc(p.publisher.pc.LocalDescription())
+	rpc := rpc.NewSDPAnswerRpc(p.publisher.pc.LocalDescription())
 	if err := p.sink.PublishClient(p.ID, rpc); err != nil {
 		return err
 	}

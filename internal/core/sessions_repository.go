@@ -17,13 +17,13 @@ type SessionsDBStorer interface {
 	Save(*Session) (*Session, error)
 	SetOnline(userID UserSessionID) error
 	SetOffline(userID UserSessionID) error
+	StartPublish(userID UserSessionID) error
+	StopPublish(userID UserSessionID) error
 	FindByUserID(userID UserSessionID) (*Session, error)
 }
 
 type StreamsRepository interface {
 	GetAll(page int, perPage int) (*OnlineStreams, error)
-	Start(session *Session) (*Session, error)
-	Stop(session *Session) (*Session, error)
 }
 
 type OnlineStreams struct {
@@ -109,7 +109,7 @@ func (r *SessionsRepository) Save(session *Session) (*Session, error) {
 				image_filename = EXCLUDED.image_filename,
 				is_online = true
 		RETURNING id`,
-		session.UserID,
+		string(session.UserID),
 		session.Title,
 		session.ImageNode,
 		session.ImageFilename,
@@ -126,7 +126,7 @@ func (r *SessionsRepository) Save(session *Session) (*Session, error) {
 
 func (r *SessionsRepository) SetOnline(userID UserSessionID) error {
 	_, err := r.db.Exec(`UPDATE sessions SET is_online = true, updated_at = NOW() WHERE user_id = $1`,
-		userID,
+		string(userID),
 	)
 	if err != nil {
 		return err
@@ -143,39 +143,38 @@ func (r *SessionsRepository) SetOffline(userID UserSessionID) error {
 			state = $1,
 			media_type = NULL
 		WHERE user_id = $2`,
-		SessionIdle,
-		userID,
+		string(SessionIdle),
+		string(userID),
 	)
 	return err
 }
 
-func (r *SessionsRepository) Start(session *Session) (*Session, error) {
-	mediaType := VideoSession
-	session.MediaType = &mediaType
-	session.State = SingleBroadcast
-
+func (r *SessionsRepository) StartPublish(userID UserSessionID) error {
 	_, err := r.db.Exec(
 		`UPDATE sessions SET
 			updated_at = NOW(),
 			state = $1,
-			media_type = $2
+			media_type = $2,
+			is_online = true
 		WHERE user_id = $3`,
-		session.State,
-		session.MediaType,
-		session.UserID,
+		string(SingleBroadcast),
+		string(VideoSession),
+		string(userID),
 	)
-	return session, err
+	return err
 }
 
-func (r *SessionsRepository) Stop(session *Session) (*Session, error) {
-	session.State = SessionIdle
-	session.MediaType = nil
-
-	if err := r.SetOffline(session.UserID); err != nil {
-		return nil, err
-	}
-
-	return session, nil
+func (r *SessionsRepository) StopPublish(userID UserSessionID) error {
+	_, err := r.db.Exec(
+		`UPDATE sessions SET
+			updated_at = NOW(),
+			state = $1,
+			media_type = NULL
+		WHERE user_id = $2`,
+		string(SessionIdle),
+		string(userID),
+	)
+	return err
 }
 
 func (r *SessionsRepository) FindByUserID(userID UserSessionID) (*Session, error) {

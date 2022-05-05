@@ -147,8 +147,7 @@ func (app *App) Router() http.Handler {
 
 	app.router.With(app.authMiddleware).Route("/api/v1", func(r chi.Router) {
 		r.Get("/ws", WebsocketsHandler(app.EventsSubscriber, app.websocket))
-		r.Post("/stream", StreamCreateHandler(app.SessionsRepository, app.DB))
-		r.Delete("/stream", StreamDeleteHandler(app.EventsPublisher, app.DB))
+		r.Put("/stream", StreamUpdateHandler(app.SessionsRepository, app.DB))
 
 		// r.Get("/streams", StreamListHandler(app.DB))
 
