@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	streamImageDir        = "/static/stream_images"
-	streamImagePrefixPath = "/stream_images"
-	streamImageURLPattern = "/rs/fit/760/760/sm/0/plain/local://%s?%d"
-	streamImageFormKey    = "stream_image"
+	streamImageDir           = "/static/stream_images"
+	streamImagePrefixPath    = "/stream_images"
+	streamImageURLPattern    = "/rs/fit/760/760/sm/0/plain/local://%s?%d"
+	streamImageFormKey       = "stream_image"
+	streamDescriptionFormKey = "stream_title"
 )
 
 // StreamImageSaver сохраняет картинку в БД
@@ -23,8 +24,9 @@ type StreamImageSaver interface {
 
 // StreamImage is cover of stream
 type StreamImage struct {
-	Session  *Session
-	Filename string
+	Session     *Session
+	Description string
+	Filename    string
 
 	rootDir      string
 	idPartitions []string
@@ -34,6 +36,10 @@ func NewStreamImage(session *Session, options ...string) *StreamImage {
 	img := &StreamImage{Session: session}
 	if len(options) > 0 && options[0] != "" {
 		img.rootDir = options[0]
+	}
+
+	if session.ImageFilename != nil {
+		img.Filename = *session.ImageFilename
 	}
 
 	return img
@@ -54,6 +60,7 @@ func (p *StreamImage) UploadHandle(r *http.Request, dbSaver StreamImageSaver) er
 	defer uploadedFile.Close()
 
 	p.Filename = fileHeader.Filename
+	p.Description = r.FormValue(streamDescriptionFormKey)
 
 	if err := dbSaver.Save(p); err != nil {
 		return err
@@ -93,7 +100,7 @@ func (s *StreamImage) URL() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf(streamImageURLPattern, imgPath, s.Session.UpdatedAt.UnixNano()), nil
+	return fmt.Sprintf(streamImageURLPattern, imgPath, s.Session.UpdatedAt.Unix()), nil
 }
 
 // Path возвращает полный путь до имени файла картинки

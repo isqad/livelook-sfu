@@ -30,6 +30,7 @@ type Session struct {
 	UpdatedAt     time.Time                  `json:"updated_at,omitempty" db:"updated_at"`
 	ImageNode     *int                       `json:"image_node,omitempty" db:"image_node"`
 	ImageFilename *string                    `json:"image_filename,omitempty" db:"image_filename"`
+	ImageURL      string                     `json:"image_url,omitempty" db:"-"`
 	Online        bool                       `json:"is_online,omitempty" db:"is_online"`
 	State         SessionState               `json:"state,omitempty" db:"state"`
 	MediaType     *SessionMediaType          `json:"media_type,omitempty" db:"media_type"`

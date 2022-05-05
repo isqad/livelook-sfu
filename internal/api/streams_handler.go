@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
@@ -90,14 +91,16 @@ func StreamListHandler(db *sqlx.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		streamRepo := core.NewStreamsRepository(db)
 
-		sessions, err := streamRepo.GetAll(1, 50)
+		streams, err := streamRepo.GetAll(1, 50)
 		if err != nil {
 			log.Error().Err(err).Str("service", "web").Msg("can't get user ID from request context")
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
-		if err := json.NewEncoder(w).Encode(sessions); err != nil {
+		w.Header().Add("x-total-pages", strconv.Itoa(streams.TotalPages))
+
+		if err := json.NewEncoder(w).Encode(streams.Streams); err != nil {
 			log.Error().Err(err).Str("service", "web").Msg("publish server rpc error")
 			w.WriteHeader(http.StatusInternalServerError)
 			return

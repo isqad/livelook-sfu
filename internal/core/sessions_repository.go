@@ -2,8 +2,10 @@ package core
 
 import (
 	"database/sql"
+	"math"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -19,9 +21,14 @@ type SessionsDBStorer interface {
 }
 
 type StreamsRepository interface {
-	GetAll(page int, perPage int) ([]*Session, error)
+	GetAll(page int, perPage int) (*OnlineStreams, error)
 	Start(session *Session) (*Session, error)
 	Stop(session *Session) (*Session, error)
+}
+
+type OnlineStreams struct {
+	Streams    []*Session
+	TotalPages int
 }
 
 type SessionsRepository struct {
@@ -40,7 +47,7 @@ func NewStreamsRepository(db *sqlx.DB) StreamsRepository {
 	}
 }
 
-func (r *SessionsRepository) GetAll(page int, perPage int) ([]*Session, error) {
+func (r *SessionsRepository) GetAll(page int, perPage int) (*OnlineStreams, error) {
 	if page == 0 {
 		page = sessionsPageDefault
 	}
@@ -48,19 +55,45 @@ func (r *SessionsRepository) GetAll(page int, perPage int) ([]*Session, error) {
 		perPage = sessionsPerPageDefault
 	}
 
-	s := []*Session{}
-	err := r.db.Select(&s,
-		`SELECT id, title, user_id
-			FROM sessions
-			WHERE state = 'broadcast_single' AND is_online
-			ORDER BY updated_at DESC LIMIT $1 OFFSET $2`,
+	streams := &OnlineStreams{}
+
+	var total int
+	err := r.db.Get(&total, `SELECT COUNT(*) FROM sessions`)
+	if err != nil {
+		return nil, err
+	}
+	streams.TotalPages = int(math.Ceil(float64(total) / float64(perPage)))
+
+	sessions := []*Session{}
+	err = r.db.Select(&sessions,
+		`SELECT
+			id,
+			title,
+			user_id,
+			is_online,
+			image_filename,
+			viewers_count,
+			updated_at,
+			created_at
+		FROM sessions
+		ORDER BY updated_at DESC LIMIT $1 OFFSET $2`,
 		perPage, (page-1)*perPage,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return s, nil
+	for _, s := range sessions {
+		img := NewStreamImage(s, viper.GetString("app.upload_root"))
+		s.ImageURL, err = img.URL()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	streams.Streams = sessions
+
+	return streams, nil
 }
 
 func (r *SessionsRepository) Save(session *Session) (*Session, error) {

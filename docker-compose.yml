@@ -72,6 +72,23 @@ services:
         max-size: "1m"
         max-file: "2"
 
+  imgproxy:
+    image: darthsim/imgproxy:latest
+    restart: always
+    environment:
+      IMGPROXY_BIND: ":80"
+      IMGPROXY_QUALITY: "95"
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: "/static"
+    volumes:
+      - ./web/static/uploaded/static:/static
+    ports:
+      - "3033:80"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "2"
+
 volumes:
   pg-data:
     driver: local

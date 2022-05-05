@@ -142,12 +142,15 @@ func (app *App) Router() http.Handler {
 		})
 	})
 
+	// TODO: protect it
+	app.router.Get("/api/v1/streams", StreamListHandler(app.DB))
+
 	app.router.With(app.authMiddleware).Route("/api/v1", func(r chi.Router) {
 		r.Get("/ws", WebsocketsHandler(app.EventsSubscriber, app.websocket))
 		r.Post("/stream", StreamCreateHandler(app.SessionsRepository, app.DB))
 		r.Delete("/stream", StreamDeleteHandler(app.EventsPublisher, app.DB))
 
-		r.Get("/streams", StreamListHandler(app.DB))
+		// r.Get("/streams", StreamListHandler(app.DB))
 
 		r.Post("/users", func(w http.ResponseWriter, r *http.Request) {
 			user := core.NewUser()
