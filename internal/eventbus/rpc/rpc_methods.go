@@ -1,11 +1,17 @@
 package rpc
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
+	"io/ioutil"
 
 	"github.com/pion/webrtc/v3"
+
+	"github.com/rs/zerolog/log"
 )
 
 const jsonRpcVersion = "2.0"
@@ -13,13 +19,15 @@ const jsonRpcVersion = "2.0"
 type Method string
 
 const (
-	JoinMethod         Method = "join"
-	ICECandidateMethod Method = "iceCandidate"
-	SDPOfferMethod     Method = "offer"
-	SDPAnswerMethod    Method = "answer"
-	CloseSessionMethod Method = "close_session"
-	StartStreamMethod  Method = "start_stream"
-	StopStreamMethod   Method = "stop_stream"
+	JoinMethod                  Method = "join"
+	ICECandidateMethod          Method = "iceCandidate"
+	SDPOfferMethod              Method = "offer"
+	SDPAnswerMethod             Method = "answer"
+	CloseSessionMethod          Method = "close_session"
+	PublishStreamMethod         Method = "publish"
+	PublishStreamStopMethod     Method = "publishStop"
+	SubscribeStreamMethod       Method = "subscribe"
+	SubscribeStreamCancelMethod Method = "subscribeCancel"
 )
 
 var (
@@ -72,16 +80,37 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 		return NewSDPAnswerRpc(sdp), nil
 	case SDPOfferMethod:
 		sdp := &webrtc.SessionDescription{}
+
 		if err := json.Unmarshal(params, sdp); err != nil {
 			return nil, err
 		}
 
+		// Unzip sdp
+		log.Debug().Interface("sdp", sdp.SDP).Msg("decode offer SDP")
+
+		gzdata, err := base64.StdEncoding.DecodeString(sdp.SDP)
+		if err != nil {
+			return nil, err
+		}
+
+		zr, err := gzip.NewReader(bytes.NewReader(gzdata))
+		if err != nil {
+			return nil, err
+		}
+
+		data, err := ioutil.ReadAll(zr)
+		if err != nil {
+			return nil, err
+		}
+
+		sdp.SDP = string(data)
+
 		return NewSDPOfferRpc(sdp), nil
 	case CloseSessionMethod:
 		return NewCloseSessionRpc(), nil
-	case StartStreamMethod:
+	case PublishStreamMethod:
 		return NewStartStreamRpc(), nil
-	case StopStreamMethod:
+	case PublishStreamStopMethod:
 		return NewStopStreamRpc(), nil
 	case JoinMethod:
 		return NewJoinRpc(), nil

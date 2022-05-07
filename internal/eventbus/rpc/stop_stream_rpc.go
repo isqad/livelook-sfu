@@ -11,7 +11,7 @@ func NewStopStreamRpc() *StopStreamRpc {
 	return &StopStreamRpc{
 		jsonRpcHead: jsonRpcHead{
 			Version: jsonRpcVersion,
-			Method:  StopStreamMethod,
+			Method:  PublishStreamStopMethod,
 		},
 		Params: nil,
 	}

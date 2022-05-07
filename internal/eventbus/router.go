@@ -98,11 +98,11 @@ func (router *Router) Start() {
 				if err := router.onCloseSession(userID); err != nil {
 					log.Error().Err(err).Str("service", "router").Msg("close session error")
 				}
-			case rpc.StartStreamMethod:
+			case rpc.PublishStreamMethod:
 				if err := router.onPublishStream(userID); err != nil {
 					log.Error().Err(err).Str("service", "router").Msg("publish stream error")
 				}
-			case rpc.StopStreamMethod:
+			case rpc.PublishStreamStopMethod:
 				if err := router.onStopStream(userID); err != nil {
 					log.Error().Err(err).Str("service", "router").Msg("stop stream error")
 				}

@@ -47,7 +47,7 @@ type App struct {
 func NewApp(options AppOptions) *App {
 	options.router = chi.NewRouter()
 	options.websocket = melody.New()
-	options.websocket.Config.MaxMessageSize = 10 * 1024
+	options.websocket.Config.MaxMessageSize = 200 * 1024 // 200K
 
 	userRepo := core.NewUserRepository(options.DB)
 	cookieStore := sessions.NewCookieStore([]byte(viper.GetString("app.secret_key")))

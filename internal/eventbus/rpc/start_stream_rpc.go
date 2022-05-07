@@ -11,7 +11,7 @@ func NewStartStreamRpc() *StartStreamRpc {
 	return &StartStreamRpc{
 		jsonRpcHead: jsonRpcHead{
 			Version: jsonRpcVersion,
-			Method:  StartStreamMethod,
+			Method:  PublishStreamMethod,
 		},
 		Params: nil,
 	}
