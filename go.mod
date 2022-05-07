@@ -9,7 +9,7 @@ require (
 	github.com/gorilla/sessions v1.2.1
 	github.com/isqad/firebase-auth-service v0.0.2
 	github.com/isqad/melody v0.0.0-20200429135154-b03b96e6f3bf
-	github.com/jackc/pgx/v4 v4.16.0
+	github.com/jackc/pgx/v4 v4.16.1
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/pion/rtcp v1.2.9
 	github.com/pion/webrtc/v3 v3.1.34
@@ -39,7 +39,7 @@ require (
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
-	github.com/jackc/pgconn v1.12.0 // indirect
+	github.com/jackc/pgconn v1.12.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgproto3/v2 v2.3.0 // indirect
