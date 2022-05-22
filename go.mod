@@ -20,7 +20,7 @@ require (
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/pion/interceptor v0.1.11
-	github.com/pion/sdp/v3 v3.0.4
+	github.com/pion/sdp/v3 v3.0.5
 	github.com/prometheus/client_golang v1.12.1
 	github.com/rs/zerolog v1.26.1
 	github.com/spf13/viper v1.10.1
