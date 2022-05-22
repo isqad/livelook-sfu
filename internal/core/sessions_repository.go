@@ -105,8 +105,6 @@ func (r *SessionsRepository) Save(session *Session) (*Session, error) {
 		VALUES ($1, $2, $3, $4, $5, $6, true) ON CONFLICT ON CONSTRAINT uniq_sessions_user_id DO UPDATE
 			SET
 				updated_at = EXCLUDED.updated_at,
-				title = EXCLUDED.title,
-				image_filename = EXCLUDED.image_filename,
 				is_online = true
 		RETURNING id`,
 		string(session.UserID),

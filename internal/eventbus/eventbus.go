@@ -21,8 +21,8 @@ func (c Channel) buildChannel(userID core.UserSessionID) string {
 }
 
 type ServerMessage struct {
-	UserID core.UserSessionID `json:"user_id"`
-	Rpc    rpc.Rpc            `json:"rpc"`
+	UserID  core.UserSessionID `json:"user_id"`
+	Message []byte             `json:"rpc"`
 }
 
 type Publisher interface {

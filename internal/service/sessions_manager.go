@@ -12,7 +12,6 @@ import (
 	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
 	"github.com/isqad/livelook-sfu/internal/rtc"
 	"github.com/isqad/livelook-sfu/internal/telemetry"
-	"github.com/pion/webrtc/v3"
 )
 
 var (
@@ -96,7 +95,7 @@ func (s *SessionsManager) StartSession(userID core.UserSessionID) error {
 	return nil
 }
 
-func (s *SessionsManager) HandleOffer(userID core.UserSessionID, sdp *webrtc.SessionDescription) error {
+func (s *SessionsManager) HandleOffer(userID core.UserSessionID, params rpc.SDPParams) error {
 	log.Debug().Str("service", "sessionsManager").Str("UserID", string(userID)).Msg("handle offer")
 
 	room, err := s.findRoom(userID)
@@ -105,19 +104,17 @@ func (s *SessionsManager) HandleOffer(userID core.UserSessionID, sdp *webrtc.Ses
 		return err
 	}
 
-	return room.HandleOffer(userID, sdp)
+	return room.HandleOffer(userID, params)
 }
 
-func (s *SessionsManager) AddICECandidate(userID core.UserSessionID, candidate *webrtc.ICECandidateInit) error {
-	log.Debug().Str("service", "sessionsManager").Interface("candidate", candidate).Str("UserID", string(userID)).Msg("add ICE candidate")
-
+func (s *SessionsManager) AddICECandidate(userID core.UserSessionID, params rpc.ICECandidateParams) error {
 	room, err := s.findRoom(userID)
 	if err != nil {
 		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("room not found")
 		return err
 	}
 
-	return room.AddICECandidate(userID, candidate)
+	return room.AddICECandidate(userID, params)
 }
 
 func (s *SessionsManager) CloseSession(userID core.UserSessionID) error {

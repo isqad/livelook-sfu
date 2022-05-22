@@ -1,10 +1,10 @@
 package api
 
 import (
-	"bytes"
 	"fmt"
-	"log"
 	"net/http"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
@@ -24,14 +24,14 @@ func WebsocketsHandler(
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, err := userFromRequest(r)
 		if err != nil {
-			log.Printf("can't get user from request context: %v", err)
+			log.Error().Err(err).Str("service", "websockets").Msg("can't get the user from request context")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		subscription, err := eventsSubscriber.SubscribeClient(core.UserSessionID(user.ID))
 		if err != nil {
-			log.Printf("can't subscribe the user to signaling channel: %v", err)
+			log.Error().Err(err).Str("service", "websockets").Msg("can't subscribe the user to signaling channel")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -41,7 +41,7 @@ func WebsocketsHandler(
 		sessKeys[wsSubscriptionSessionKey] = subscription
 
 		if err := websocket.HandleRequestWithKeys(w, r, sessKeys); err != nil {
-			log.Printf("can't handle request: %v", err)
+			log.Error().Err(err).Str("service", "websockets").Msg("can't handle request")
 		}
 	}
 }
@@ -52,22 +52,27 @@ func DisconnectHandler(eventsPublisher eventbus.Publisher) func(session *melody.
 
 		user, err := getUserFromSession(session)
 		if err != nil {
-			log.Printf("extract subscription error: %v", err)
+			log.Error().Err(err).Str("service", "websockets").Msg("extract user from session")
 			return
-		}
-
-		rpc := rpc.NewCloseSessionRpc()
-		if err := eventsPublisher.PublishServer(eventbus.ServerMessage{UserID: user.ID, Rpc: rpc}); err != nil {
-			log.Printf("publish server rpc error: %v", err)
 		}
 
 		subscription, err := getUserSubscription(session)
 		if err != nil {
-			log.Printf("extract subscription error: %v", err)
+			log.Error().Err(err).Str("service", "websockets").Msg("extract subscription")
 			return
 		}
 		if err := subscription.Close(); err != nil {
-			log.Printf("close subscription error: %v", err)
+			log.Error().Err(err).Str("service", "websockets").Msg("close subscription")
+			return
+		}
+
+		message, err := rpc.NewCloseSessionRpc().ToJSON()
+		if err != nil {
+			log.Error().Err(err).Str("service", "websockets").Msg("publish rpc")
+			return
+		}
+		if err := eventsPublisher.PublishServer(eventbus.ServerMessage{UserID: user.ID, Message: message}); err != nil {
+			log.Error().Err(err).Str("service", "websockets").Msg("publish rpc")
 		}
 	}
 }
@@ -76,13 +81,16 @@ func ConnectHandler(eventsPublisher eventbus.Publisher) func(session *melody.Ses
 	return func(session *melody.Session) {
 		subscription, err := getUserSubscription(session)
 		if err != nil {
-			log.Printf("extract subscription error: %v", err)
+			log.Error().Err(err).Str("service", "websockets").Msg("extract subscription")
+			closeWsSession(session)
 			return
 		}
 
 		user, err := getUserFromSession(session)
 		if err != nil {
-			log.Printf("extract user error: %v", err)
+			log.Error().Err(err).Str("service", "websockets").Msg("extract user error")
+			subscription.Close()
+			closeWsSession(session)
 			return
 		}
 
@@ -93,9 +101,11 @@ func ConnectHandler(eventsPublisher eventbus.Publisher) func(session *melody.Ses
 
 			close(ready)
 			for msg := range ch {
-				if err := session.Write([]byte(msg.Payload)); err != nil {
+				payload := msg.Payload
+
+				if err := session.Write([]byte(payload)); err != nil {
 					// there's only session closed error can be
-					log.Printf("ws write error: %v", err)
+					log.Error().Err(err).Str("service", "websockets").Str("userID", string(user.ID))
 					return
 				}
 			}
@@ -103,13 +113,23 @@ func ConnectHandler(eventsPublisher eventbus.Publisher) func(session *melody.Ses
 
 		<-ready
 
+		message, err := rpc.NewJoinRpc().ToJSON()
+		if err != nil {
+			log.Error().Err(err).Str("service", "websockets").Str("userID", string(user.ID))
+			subscription.Close()
+			closeWsSession(session)
+
+			return
+		}
 		msg := eventbus.ServerMessage{
-			UserID: user.ID,
-			Rpc:    rpc.NewJoinRpc(),
+			UserID:  user.ID,
+			Message: message,
 		}
 
 		if err := eventsPublisher.PublishServer(msg); err != nil {
-			log.Printf("publishing failed due server error: %v", err)
+			log.Error().Err(err).Str("service", "websockets").Str("userID", string(user.ID))
+			subscription.Close()
+			closeWsSession(session)
 			return
 		}
 	}
@@ -119,19 +139,14 @@ func HandleMessage(eventsPublisher eventbus.Publisher) func(s *melody.Session, m
 	return func(s *melody.Session, msg []byte) {
 		user, err := getUserFromSession(s)
 		if err != nil {
-			log.Printf("extract user error: %v", err)
+			log.Error().Err(err).Str("service", "websockets")
+			closeWsSession(s)
 			return
 		}
 
-		reader := bytes.NewReader(msg)
-		rpc, err := rpc.RpcFromReader(reader)
-		if err != nil {
-			log.Printf("rpc parse error: %v", err)
-			return
-		}
-
-		if err := eventsPublisher.PublishServer(eventbus.ServerMessage{UserID: user.ID, Rpc: rpc}); err != nil {
-			log.Printf("publish server rpc error: %v", err)
+		if err := eventsPublisher.PublishServer(eventbus.ServerMessage{UserID: user.ID, Message: msg}); err != nil {
+			log.Error().Err(err).Str("service", "websockets").Str("userID", string(user.ID))
+			closeWsSession(s)
 		}
 	}
 }
@@ -163,6 +178,6 @@ func getUserFromSession(s *melody.Session) (*core.User, error) {
 
 func closeWsSession(session *melody.Session) {
 	if !session.IsClosed() {
-		log.Printf("close session: %v", session.Close())
+		log.Error().Err(session.Close()).Str("service", "websockets").Msg("close session")
 	}
 }

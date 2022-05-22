@@ -80,17 +80,17 @@ func newPeerConnection(params TransportParams) (*webrtc.PeerConnection, *webrtc.
 	return pc, me, err
 }
 
-func (t *PCTransport) AddICECandidate(candidate *webrtc.ICECandidateInit) error {
+func (t *PCTransport) AddICECandidate(candidate webrtc.ICECandidateInit) error {
 	desc := t.pc.RemoteDescription()
 	if desc != nil {
-		t.pc.AddICECandidate(*candidate)
+		t.pc.AddICECandidate(candidate)
 		return nil
 	}
 
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	t.pendingCandidates = append(t.pendingCandidates, *candidate)
+	t.pendingCandidates = append(t.pendingCandidates, candidate)
 
 	return nil
 }

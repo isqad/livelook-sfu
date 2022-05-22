@@ -12,30 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestIDPartition(t *testing.T) {
-	got, err := idPartition(1)
-	assert.Nil(t, err)
-
-	if strings.Join(got, `/`) != "000/000/001" {
-		t.Errorf("IdPartition(1) = %s; want 000/000/001", got)
-	}
-
-	_, err = idPartition(-1)
-	assert.NotNil(t, err)
-
-	got, err = idPartition(int64(1234567891234568))
-	assert.Nil(t, err)
-	if strings.Join(got, `/`) != "123/456/789/123/456/8" {
-		t.Errorf("IdPartition(1234567891234568) = %s; want 123/456/789/123/456/8", got)
-	}
-
-	got, err = idPartition(int64(12345678912))
-	assert.Nil(t, err)
-	if strings.Join(got, `/`) != "123/456/789/12" {
-		t.Errorf("IdPartition(12345678912) = %s; want 123/456/789/12", got)
-	}
-}
-
 func TestPhotoUrl(t *testing.T) {
 	photo := &UserProfileImage{
 		ID:       100500,

@@ -49,7 +49,7 @@ func NewParticipant(
 	p.publisher.pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Interface("candidate", candidate).Msg("send ICE candidate")
 
-		if err := p.sendICECandidate(candidate); err != nil {
+		if err := p.sendICECandidate(candidate, rpc.Publisher); err != nil {
 			log.Error().Err(err).Str("service", "participant").Str("ID", string(p.ID)).Msg("error on send ICE candidate")
 		}
 	})
@@ -60,17 +60,22 @@ func NewParticipant(
 	return p, nil
 }
 
-func (p *Participant) AddICECandidate(candidate *webrtc.ICECandidateInit) error {
-	return p.publisher.AddICECandidate(candidate)
+func (p *Participant) AddICECandidate(params rpc.ICECandidateParams) error {
+	if params.Target == rpc.Publisher {
+		return p.publisher.AddICECandidate(params.ICECandidateInit)
+	} else {
+		return nil
+	}
+
 }
 
-func (p *Participant) sendICECandidate(candidate *webrtc.ICECandidate) error {
+func (p *Participant) sendICECandidate(candidate *webrtc.ICECandidate, target rpc.SignalingTarget) error {
 	if candidate == nil {
 		return nil
 	}
 
 	candidateInit := candidate.ToJSON()
-	rpc := rpc.NewICECandidateRpc(&candidateInit)
+	rpc := rpc.NewICECandidateRpc(candidateInit, target)
 
 	if err := p.sink.PublishClient(p.ID, rpc); err != nil {
 		return err
@@ -79,28 +84,32 @@ func (p *Participant) sendICECandidate(candidate *webrtc.ICECandidate) error {
 	return nil
 }
 
-func (p *Participant) HandleOffer(sdp webrtc.SessionDescription) error {
-	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Interface("sdp", sdp).Msg("handle offer")
+func (p *Participant) HandleOffer(params rpc.SDPParams) error {
+	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Interface("params", params).Msg("handle offer")
 
-	if err := p.publisher.SetRemoteDescription(sdp); err != nil {
-		return err
-	}
+	if params.Target == rpc.Publisher {
+		if err := p.publisher.SetRemoteDescription(params.SessionDescription); err != nil {
+			return err
+		}
 
-	answer, err := p.publisher.pc.CreateAnswer(nil)
-	if err != nil {
-		return err
-	}
+		answer, err := p.publisher.pc.CreateAnswer(nil)
+		if err != nil {
+			return err
+		}
 
-	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Interface("sdp", answer).Msg("created answer")
+		log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Interface("sdp", answer).Msg("created answer")
 
-	err = p.publisher.pc.SetLocalDescription(answer)
-	if err != nil {
-		return err
-	}
+		err = p.publisher.pc.SetLocalDescription(answer)
+		if err != nil {
+			return err
+		}
 
-	rpc := rpc.NewSDPAnswerRpc(p.publisher.pc.LocalDescription())
-	if err := p.sink.PublishClient(p.ID, rpc); err != nil {
-		return err
+		rpc := rpc.NewSDPAnswerRpc(p.publisher.pc.LocalDescription(), rpc.Publisher)
+		if err := p.sink.PublishClient(p.ID, rpc); err != nil {
+			return err
+		}
+	} else {
+		log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Msg("handle offer of the receiver")
 	}
 
 	return nil

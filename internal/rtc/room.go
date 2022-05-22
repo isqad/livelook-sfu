@@ -7,7 +7,7 @@ import (
 	"github.com/isqad/livelook-sfu/internal/config"
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
-	"github.com/pion/webrtc/v3"
+	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
 )
 
 var (
@@ -45,7 +45,7 @@ func (r *Room) Join(participant *Participant) {
 	r.lock.Unlock()
 }
 
-func (r *Room) HandleOffer(userID core.UserSessionID, sdp *webrtc.SessionDescription) error {
+func (r *Room) HandleOffer(userID core.UserSessionID, params rpc.SDPParams) error {
 	r.lock.RLock()
 	participant := r.participants[userID]
 	r.lock.RUnlock()
@@ -54,10 +54,10 @@ func (r *Room) HandleOffer(userID core.UserSessionID, sdp *webrtc.SessionDescrip
 		return errNoParticipant
 	}
 
-	return participant.HandleOffer(*sdp)
+	return participant.HandleOffer(params)
 }
 
-func (r *Room) AddICECandidate(userID core.UserSessionID, candidate *webrtc.ICECandidateInit) error {
+func (r *Room) AddICECandidate(userID core.UserSessionID, params rpc.ICECandidateParams) error {
 	r.lock.RLock()
 	participant := r.participants[userID]
 	r.lock.RUnlock()
@@ -66,7 +66,7 @@ func (r *Room) AddICECandidate(userID core.UserSessionID, candidate *webrtc.ICEC
 		return errNoParticipant
 	}
 
-	return participant.AddICECandidate(candidate)
+	return participant.AddICECandidate(params)
 }
 
 func (r *Room) PublishStream(userID core.UserSessionID) error {

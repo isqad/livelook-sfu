@@ -6,29 +6,40 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
+type SDPParams struct {
+	webrtc.SessionDescription
+	Target SignalingTarget `json:"target"`
+}
+
 // SDP RPC
 type SDPRpc struct {
 	jsonRpcHead
-	Params *webrtc.SessionDescription `json:"params"`
+	Params SDPParams `json:"params"`
 }
 
-func NewSDPAnswerRpc(sdp *webrtc.SessionDescription) *SDPRpc {
+func NewSDPAnswerRpc(sdp *webrtc.SessionDescription, target SignalingTarget) *SDPRpc {
 	return &SDPRpc{
 		jsonRpcHead: jsonRpcHead{
 			Version: jsonRpcVersion,
 			Method:  SDPAnswerMethod,
 		},
-		Params: sdp,
+		Params: SDPParams{
+			*sdp,
+			target,
+		},
 	}
 }
 
-func NewSDPOfferRpc(sdp *webrtc.SessionDescription) *SDPRpc {
+func NewSDPOfferRpc(sdp *webrtc.SessionDescription, target SignalingTarget) *SDPRpc {
 	return &SDPRpc{
 		jsonRpcHead: jsonRpcHead{
 			Version: jsonRpcVersion,
 			Method:  SDPOfferMethod,
 		},
-		Params: sdp,
+		Params: SDPParams{
+			*sdp,
+			target,
+		},
 	}
 }
 

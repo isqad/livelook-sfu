@@ -8,10 +8,6 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
-
-	"github.com/pion/webrtc/v3"
-
-	"github.com/rs/zerolog/log"
 )
 
 const jsonRpcVersion = "2.0"
@@ -35,6 +31,13 @@ var (
 	ErrMalformedRpc   = errors.New("malformed RPC")
 )
 
+type SignalingTarget string
+
+const (
+	Publisher SignalingTarget = "publisher"
+	Receiver  SignalingTarget = "receiver"
+)
+
 type Rpc interface {
 	GetMethod() Method
 	ToJSON() ([]byte, error)
@@ -52,7 +55,6 @@ type jsonRpc struct {
 
 func RpcFromReader(reader io.Reader) (Rpc, error) {
 	rpc := &jsonRpc{}
-
 	err := json.NewDecoder(reader).Decode(rpc)
 	if err != nil {
 		return nil, err
@@ -65,30 +67,26 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 
 	switch rpc.Method {
 	case ICECandidateMethod:
-		c := &webrtc.ICECandidateInit{}
-		if err := json.Unmarshal(params, c); err != nil {
+		iceCandidateParams := &ICECandidateParams{}
+		if err := json.Unmarshal(params, iceCandidateParams); err != nil {
 			return nil, err
 		}
 
-		return NewICECandidateRpc(c), nil
+		return NewICECandidateRpc(iceCandidateParams.ICECandidateInit, iceCandidateParams.Target), nil
 	case SDPAnswerMethod:
-		sdp := &webrtc.SessionDescription{}
-		if err := json.Unmarshal(params, sdp); err != nil {
+		sdpParams := &SDPParams{}
+		if err := json.Unmarshal(params, sdpParams); err != nil {
 			return nil, err
 		}
 
-		return NewSDPAnswerRpc(sdp), nil
+		return NewSDPAnswerRpc(&sdpParams.SessionDescription, sdpParams.Target), nil
 	case SDPOfferMethod:
-		sdp := &webrtc.SessionDescription{}
-
-		if err := json.Unmarshal(params, sdp); err != nil {
+		sdpParams := &SDPParams{}
+		if err := json.Unmarshal(params, sdpParams); err != nil {
 			return nil, err
 		}
 
-		// Unzip sdp
-		log.Debug().Interface("sdp", sdp.SDP).Msg("decode offer SDP")
-
-		gzdata, err := base64.StdEncoding.DecodeString(sdp.SDP)
+		gzdata, err := base64.StdEncoding.DecodeString(sdpParams.SDP)
 		if err != nil {
 			return nil, err
 		}
@@ -103,9 +101,9 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 			return nil, err
 		}
 
-		sdp.SDP = string(data)
+		sdpParams.SDP = string(data)
 
-		return NewSDPOfferRpc(sdp), nil
+		return NewSDPOfferRpc(&sdpParams.SessionDescription, sdpParams.Target), nil
 	case CloseSessionMethod:
 		return NewCloseSessionRpc(), nil
 	case PublishStreamMethod:

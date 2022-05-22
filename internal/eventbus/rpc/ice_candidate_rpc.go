@@ -6,19 +6,27 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
+type ICECandidateParams struct {
+	webrtc.ICECandidateInit
+	Target SignalingTarget `json:"target"`
+}
+
 // ICE candidate RPC
 type ICECandidateRpc struct {
 	jsonRpcHead
-	Params *webrtc.ICECandidateInit `json:"params"`
+	Params ICECandidateParams `json:"params"`
 }
 
-func NewICECandidateRpc(candidate *webrtc.ICECandidateInit) *ICECandidateRpc {
+func NewICECandidateRpc(candidate webrtc.ICECandidateInit, target SignalingTarget) *ICECandidateRpc {
 	return &ICECandidateRpc{
 		jsonRpcHead: jsonRpcHead{
 			Version: jsonRpcVersion,
 			Method:  ICECandidateMethod,
 		},
-		Params: candidate,
+		Params: ICECandidateParams{
+			ICECandidateInit: candidate,
+			Target:           target,
+		},
 	}
 }
 

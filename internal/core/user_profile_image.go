@@ -1,7 +1,6 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -137,35 +136,4 @@ func (p *UserProfileImage) IDPartitions() ([]string, error) {
 	}
 
 	return idPartition(p.ID)
-}
-
-func idPartition(id int64) ([]string, error) {
-	if id <= 0 {
-		return nil, errors.New("ID must be greater or equal to zero")
-	}
-
-	var parts []string
-
-	idStr := fmt.Sprintf("%09d", id)
-
-	acc := ""
-	idStrLen := len(idStr)
-	tailLen := idStrLen
-	nextPos := 0
-
-	for pos, c := range idStr {
-		acc += string(c)
-		nextPos = pos + 1
-
-		if nextPos%imgPartLen == 0 {
-			parts = append(parts, acc)
-			acc = ""
-			tailLen -= imgPartLen
-		} else if tailLen > 0 && tailLen < imgPartLen {
-			parts = append(parts, idStr[pos:idStrLen])
-			break
-		}
-	}
-
-	return parts, nil
 }

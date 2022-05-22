@@ -9,7 +9,6 @@ import (
 
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
-	"github.com/pion/webrtc/v3"
 )
 
 var (
@@ -27,8 +26,8 @@ type Router struct {
 	EventsSubscriber Subscriber
 	subscription     *Subscription
 
-	onAddICECandidate func(core.UserSessionID, *webrtc.ICECandidateInit) error
-	onOffer           func(core.UserSessionID, *webrtc.SessionDescription) error
+	onAddICECandidate func(core.UserSessionID, rpc.ICECandidateParams) error
+	onOffer           func(core.UserSessionID, rpc.SDPParams) error
 	onJoin            func(core.UserSessionID) error
 	onCloseSession    func(core.UserSessionID) error
 	onPublishStream   func(core.UserSessionID) error
@@ -57,9 +56,11 @@ func (router *Router) Start() {
 		channel := router.subscription.Channel()
 
 		for msg := range channel {
-			userID, r, err := parseRpc(msg.Payload)
+			payload := msg.Payload
+
+			userID, r, err := parseRpc(payload)
 			if err != nil {
-				log.Error().Err(err).Str("service", "router").Msg("")
+				log.Error().Err(err).Str("service", "router").Interface("payload", payload).Msg("can't parse RPC")
 				continue
 			}
 
@@ -124,35 +125,25 @@ func (router *Router) Start() {
 }
 
 func parseRpc(payload string) (core.UserSessionID, rpc.Rpc, error) {
-	serverMessage := make(map[string]interface{})
-	if err := json.Unmarshal([]byte(payload), &serverMessage); err != nil {
-		log.Error().Err(err).Str("service", "router").Msg("")
+	serverMessage := &ServerMessage{}
+
+	if err := json.Unmarshal([]byte(payload), serverMessage); err != nil {
 		return "", nil, err
 	}
 
-	strUserID, ok := serverMessage["user_id"].(string)
-	if !ok {
-		err := errors.New("can't get user id")
-		log.Error().Interface("serverMessage", serverMessage).Str("service", "router").Err(err).Msg("")
-		return "", nil, errors.New("can't get user id")
-	}
-
-	rawRpc, err := json.Marshal(serverMessage["rpc"])
-	if err != nil {
-		log.Error().Err(err).Str("service", "router").Msg("")
-		return "", nil, err
-	}
+	userID := serverMessage.UserID
+	rawRpc := serverMessage.Message
 
 	reader := bytes.NewReader(rawRpc)
 	rpc, err := rpc.RpcFromReader(reader)
 	if err != nil {
-		log.Error().Err(err).Str("service", "router").Msg("")
 		return "", nil, err
 	}
-	return core.UserSessionID(strUserID), rpc, nil
+
+	return core.UserSessionID(userID), rpc, nil
 }
 
-func (router *Router) OnAddICECandidate(callback func(core.UserSessionID, *webrtc.ICECandidateInit) error) {
+func (router *Router) OnAddICECandidate(callback func(core.UserSessionID, rpc.ICECandidateParams) error) {
 	router.onAddICECandidate = callback
 }
 
@@ -160,7 +151,7 @@ func (router *Router) OnJoin(callback func(core.UserSessionID) error) {
 	router.onJoin = callback
 }
 
-func (router *Router) OnOffer(callback func(core.UserSessionID, *webrtc.SessionDescription) error) {
+func (router *Router) OnOffer(callback func(core.UserSessionID, rpc.SDPParams) error) {
 	router.onOffer = callback
 }
 
