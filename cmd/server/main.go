@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"path"
+	"syscall"
 	"text/template"
 	"time"
 
@@ -52,6 +55,9 @@ func main() {
 		log.Fatal().Err(err).Msg("can not read config file")
 	}
 
+	quit := make(chan os.Signal, 1)
+	done := make(chan bool, 1)
+
 	dataSrcName := fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s",
 		viper.GetString("db.user"),
@@ -90,12 +96,12 @@ func main() {
 		log.Fatal().Err(err).Msg("")
 	}
 	sfuConfig := config.NewConfig()
-	_, err = service.NewSessionsManager(sfuConfig, sfuRouter, redisPubSub, sessionsStorer)
+	sessionManager, err := service.NewSessionsManager(sfuConfig, sfuRouter, redisPubSub, sessionsStorer)
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
 
-	sfuRouter.Start()
+	<-sfuRouter.Start()
 
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
@@ -156,6 +162,8 @@ func main() {
 
 	r.Handle("/metrics", promhttp.Handler())
 
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
 	server := &http.Server{
 		Addr:              ":" + viper.GetString("app.port"),
 		Handler:           r,
@@ -163,9 +171,50 @@ func main() {
 		WriteTimeout:      10 * time.Second,
 	}
 
+	server.RegisterOnShutdown(func() {
+		log.Warn().Msg("received signal to terminate the server")
+
+		log.Info().Msg("send terminate signal to clients")
+		sessionManager.Close()
+
+		log.Info().Msg("stop router")
+		<-sfuRouter.Stop()
+
+		log.Info().Msg("close redis link")
+		if err := rdb.Close(); err != nil {
+			log.Error().Err(err).Msg("")
+		}
+
+		log.Info().Msg("close db link")
+		if err := db.Close(); err != nil {
+			log.Error().Err(err).Msg("")
+		}
+
+		log.Info().Msg("all services are stopped")
+		close(done)
+	})
+
+	// Shutdown the HTTP server
+	go func() {
+		<-quit
+		log.Warn().Msg("the server is going shutting down")
+
+		// Wait 20 seconds for close http connections
+		waitIdleConnCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+
+		server.SetKeepAlivesEnabled(false)
+		if err := server.Shutdown(waitIdleConnCtx); err != nil {
+			log.Fatal().Err(err).Msg("can't gracefully shutdown the server")
+		}
+	}()
+
 	err = server.ListenAndServeTLS("configs/certs/cert.pem", "configs/certs/key.pem")
 
 	if err != nil && err != http.ErrServerClosed {
 		log.Fatal().Err(err).Msg("server has been closed immediatelly")
 	}
+
+	<-done
+	log.Info().Msg("server stopped")
 }
