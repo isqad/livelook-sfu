@@ -86,22 +86,24 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 			return nil, err
 		}
 
-		gzdata, err := base64.StdEncoding.DecodeString(sdpParams.SDP)
-		if err != nil {
-			return nil, err
-		}
+		if sdpParams.SDP != "" {
+			gzdata, err := base64.StdEncoding.DecodeString(sdpParams.SDP)
+			if err != nil {
+				return nil, err
+			}
 
-		zr, err := gzip.NewReader(bytes.NewReader(gzdata))
-		if err != nil {
-			return nil, err
-		}
+			zr, err := gzip.NewReader(bytes.NewReader(gzdata))
+			if err != nil {
+				return nil, err
+			}
 
-		data, err := ioutil.ReadAll(zr)
-		if err != nil {
-			return nil, err
-		}
+			data, err := ioutil.ReadAll(zr)
+			if err != nil {
+				return nil, err
+			}
 
-		sdpParams.SDP = string(data)
+			sdpParams.SDP = string(data)
+		}
 
 		return NewSDPOfferRpc(&sdpParams.SessionDescription, sdpParams.Target), nil
 	case CloseSessionMethod:
