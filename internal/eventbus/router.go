@@ -12,19 +12,20 @@ import (
 )
 
 var (
-	errConvertIceCandidate  = errors.New("can't convert to ice candidate")
-	errConvertOffer         = errors.New("can't convert to offer")
-	errConvertJoin          = errors.New("can't convert to join")
-	errConvertAddRemotePeer = errors.New("can't convert to add_remote_peer rpc")
-	errPeerNotFound         = errors.New("can't find peer")
-	errUndefinedMethod      = errors.New("undefined method")
+	errConvertIceCandidate = errors.New("can't convert to ice candidate")
+	errConvertOffer        = errors.New("can't convert to offer")
+	errConvertJoin         = errors.New("can't convert to join")
+	errUndefinedMethod     = errors.New("undefined method")
 )
 
 // Router - Внутренний маршрутиризатор RPC-вызовов
 // Его задача подписаться на события redis pub/sub и вызывать определенные колбеки сервера
 type Router struct {
 	EventsSubscriber Subscriber
-	subscription     *Subscription
+	subscription     RedisBus
+
+	stop    chan struct{}
+	stopped chan struct{}
 
 	onAddICECandidate func(core.UserSessionID, rpc.ICECandidateParams) error
 	onOffer           func(core.UserSessionID, rpc.SDPParams) error
@@ -37,6 +38,8 @@ type Router struct {
 func NewRouter(sub Subscriber) (*Router, error) {
 	router := &Router{
 		EventsSubscriber: sub,
+		stop:             make(chan struct{}),
+		stopped:          make(chan struct{}),
 	}
 	subscription, err := router.EventsSubscriber.SubscribeServer()
 	if err != nil {

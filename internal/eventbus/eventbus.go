@@ -31,8 +31,14 @@ type Publisher interface {
 }
 
 type Subscriber interface {
-	SubscribeClient(userID core.UserSessionID) (*Subscription, error)
-	SubscribeServer() (*Subscription, error)
+	SubscribeClient(userID core.UserSessionID) (RedisBus, error)
+	SubscribeServer() (RedisBus, error)
+}
+
+// RedisBus is an interface for interaction with redis pubsub implementation
+type RedisBus interface {
+	Channel() <-chan *redis.Message
+	Close() error
 }
 
 type Subscription struct {
@@ -72,7 +78,7 @@ func (e *Eventbus) PublishServer(message ServerMessage) error {
 	return e.rdb.Publish(context.Background(), string(ServerMessages), msg).Err()
 }
 
-func (e *Eventbus) SubscribeClient(userID core.UserSessionID) (*Subscription, error) {
+func (e *Eventbus) SubscribeClient(userID core.UserSessionID) (RedisBus, error) {
 	ctx := context.Background()
 	// Subscribe user to messages
 	pubsub := e.rdb.Subscribe(ctx, ClientMessages.buildChannel(userID))
@@ -84,7 +90,7 @@ func (e *Eventbus) SubscribeClient(userID core.UserSessionID) (*Subscription, er
 	return &Subscription{pubsub: pubsub}, nil
 }
 
-func (e *Eventbus) SubscribeServer() (*Subscription, error) {
+func (e *Eventbus) SubscribeServer() (RedisBus, error) {
 	ctx := context.Background()
 	// Subscribe user to messages
 	pubsub := e.rdb.Subscribe(ctx, string(ServerMessages))
