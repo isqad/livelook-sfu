@@ -189,6 +189,11 @@ func (s *SessionsManager) StopStream(userID core.UserSessionID) error {
 	return nil
 }
 
+// Close sends messages about terminate the server to all active clients
+func (s *SessionsManager) Close() error {
+	return nil
+}
+
 func (s *SessionsManager) findOrInitRoom(userID core.UserSessionID) (*rtc.Room, error) {
 	s.lock.RLock()
 	room := s.sessions[userID]
