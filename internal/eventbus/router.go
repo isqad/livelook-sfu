@@ -50,87 +50,100 @@ func NewRouter(sub Subscriber) (*Router, error) {
 	return router, nil
 }
 
-func (router *Router) Start() {
-	log.Debug().Str("service", "router").Msg("start")
+func (router *Router) Start() chan struct{} {
+	started := make(chan struct{})
 
 	go func() {
+		log.Debug().Str("service", "router").Msg("started")
+
 		// If the Go channel
 		// is blocked full for 30 seconds the message is dropped.
 		channel := router.subscription.Channel()
 
-		for msg := range channel {
-			payload := msg.Payload
+		close(started)
+		for {
+			select {
+			case msg := <-channel:
+				payload := []byte(msg.Payload)
 
-			userID, r, err := parseRpc(payload)
-			if err != nil {
-				log.Error().Err(err).Str("service", "router").Interface("payload", payload).Msg("can't parse RPC")
-				continue
-			}
-
-			switch r.GetMethod() {
-			case rpc.ICECandidateMethod:
-				msg, ok := r.(*rpc.ICECandidateRpc)
-				if !ok {
-					log.Error().Err(errConvertIceCandidate).Str("service", "router").Msg("")
+				userID, r, err := parseRpc(payload)
+				if err != nil {
+					log.Error().Err(err).Str("service", "router").Interface("payload", payload).Msg("can't parse RPC")
 					continue
 				}
 
-				if err := router.onAddICECandidate(userID, msg.Params); err != nil {
-					log.Error().Err(err).Str("service", "router").Msg("router: error add ice candidate")
+				switch r.GetMethod() {
+				case rpc.ICECandidateMethod:
+					msg, ok := r.(*rpc.ICECandidateRpc)
+					if !ok {
+						log.Error().Err(errConvertIceCandidate).Str("service", "router").Msg("")
+						continue
+					}
+
+					if err := router.onAddICECandidate(userID, msg.Params); err != nil {
+						log.Error().Err(err).Str("service", "router").Msg("router: error add ice candidate")
+					}
+				case rpc.JoinMethod:
+					_, ok := r.(*rpc.JoinRpc)
+					if !ok {
+						log.Error().Err(errConvertJoin).Str("service", "router").Msg("")
+						continue
+					}
+
+					if err := router.onJoin(userID); err != nil {
+						log.Error().Err(err).Str("service", "router").Msg("error occured in onJoin")
+					}
+				case rpc.SDPOfferMethod:
+					msg, ok := r.(*rpc.SDPRpc)
+					if !ok {
+						log.Error().Err(errConvertOffer).Str("service", "router").Msg("")
+						continue
+					}
+
+					if err := router.onOffer(userID, msg.Params); err != nil {
+						log.Error().Err(err).Str("service", "router").Msg("error occured in onOffer")
+					}
+				case rpc.CloseSessionMethod:
+					if err := router.onCloseSession(userID); err != nil {
+						log.Error().Err(err).Str("service", "router").Msg("close session error")
+					}
+				case rpc.PublishStreamMethod:
+					if err := router.onPublishStream(userID); err != nil {
+						log.Error().Err(err).Str("service", "router").Msg("publish stream error")
+					}
+				case rpc.PublishStreamStopMethod:
+					if err := router.onStopStream(userID); err != nil {
+						log.Error().Err(err).Str("service", "router").Msg("stop stream error")
+					}
+				default:
+					log.Error().Err(errUndefinedMethod).Str("rpcMethod", string(r.GetMethod())).Str("service", "router").Msg("")
 				}
-			case rpc.JoinMethod:
-				_, ok := r.(*rpc.JoinRpc)
-				if !ok {
-					log.Error().Err(errConvertJoin).Str("service", "router").Msg("")
-					continue
+			case <-router.stop:
+				if err := router.subscription.Close(); err != nil {
+					log.Error().Err(err).Str("service", "router").Msg("close subscription errored")
 				}
 
-				if err := router.onJoin(userID); err != nil {
-					log.Error().Err(err).Str("service", "router").Msg("error occured in onJoin")
-				}
-			case rpc.SDPOfferMethod:
-				msg, ok := r.(*rpc.SDPRpc)
-				if !ok {
-					log.Error().Err(errConvertOffer).Str("service", "router").Msg("")
-					continue
-				}
+				close(router.stopped)
 
-				if err := router.onOffer(userID, msg.Params); err != nil {
-					log.Error().Err(err).Str("service", "router").Msg("error occured in onOffer")
-				}
-			case rpc.CloseSessionMethod:
-				if err := router.onCloseSession(userID); err != nil {
-					log.Error().Err(err).Str("service", "router").Msg("close session error")
-				}
-			case rpc.PublishStreamMethod:
-				if err := router.onPublishStream(userID); err != nil {
-					log.Error().Err(err).Str("service", "router").Msg("publish stream error")
-				}
-			case rpc.PublishStreamStopMethod:
-				if err := router.onStopStream(userID); err != nil {
-					log.Error().Err(err).Str("service", "router").Msg("stop stream error")
-				}
-			// case AddRemotePeerMethod:
-			// 	rpc, ok := rpc.(*AddRemotePeerRpc)
-			// 	if !ok {
-			// 		log.Printf("commutator: error: %v", errConvertAddRemotePeer)
-			// 		continue
-			// 	}
-
-			// 	if err := c.addRemotePeer(userID, rpc.Params["user_id"]); err != nil {
-			// 		log.Printf("commutator: error on add remote peer: %v", err)
-			// 	}
-			default:
-				log.Error().Err(errUndefinedMethod).Str("rpcMethod", string(r.GetMethod())).Str("service", "router").Msg("")
+				log.Debug().Str("service", "router").Msg("stopped")
+				return
 			}
 		}
 	}()
+
+	return started
 }
 
-func parseRpc(payload string) (core.UserSessionID, rpc.Rpc, error) {
+func (router *Router) Stop() chan struct{} {
+	router.stop <- struct{}{}
+
+	return router.stopped
+}
+
+func parseRpc(payload []byte) (core.UserSessionID, rpc.Rpc, error) {
 	serverMessage := &ServerMessage{}
 
-	if err := json.Unmarshal([]byte(payload), serverMessage); err != nil {
+	if err := json.Unmarshal(payload, serverMessage); err != nil {
 		return "", nil, err
 	}
 
