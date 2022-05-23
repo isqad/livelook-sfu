@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAuthMiddleware(t *testing.T) {
+func checkAuthMiddleware(t *testing.T) {
 	db, _, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
