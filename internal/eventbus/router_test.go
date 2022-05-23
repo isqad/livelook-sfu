@@ -21,6 +21,8 @@ type MockCallbacks struct {
 	OnOfferFired                 bool
 	OnPublishStreamFired         bool
 	OnStopStreamFired            bool
+	OnSubscribeStreamFired       bool
+	OnSubscribeStreamCancelFired bool
 }
 
 func (m *MockCallbacks) JoinMockCallback(userID core.UserSessionID) error {
@@ -48,6 +50,18 @@ func (m *MockCallbacks) OnPublishStream(userID core.UserSessionID) error {
 
 func (m *MockCallbacks) OnStopStream(userID core.UserSessionID) error {
 	m.OnStopStreamFired = true
+
+	return nil
+}
+
+func (m *MockCallbacks) OnSubscribeStream(userID core.UserSessionID) error {
+	m.OnSubscribeStreamFired = true
+
+	return nil
+}
+
+func (m *MockCallbacks) OnSubscribeStreamCancel(userID core.UserSessionID) error {
+	m.OnSubscribeStreamCancelFired = true
 
 	return nil
 }
@@ -184,6 +198,50 @@ func TestOnStopStream(t *testing.T) {
 	<-router.Stop()
 
 	assert.Equal(t, true, callbacks.OnStopStreamFired)
+}
+
+func TestOnSubscribeStream(t *testing.T) {
+	payload, err := mockServerMessagePayload(rpc.SubscribeStreamMethod, "{}")
+	assert.Nil(t, err)
+
+	callbacks := &MockCallbacks{}
+
+	mockBus := NewMockBus()
+
+	s := NewMockSubscriber(mockBus)
+	router, err := NewRouter(s)
+	assert.Nil(t, err)
+
+	router.OnSubscribeStream(callbacks.OnSubscribeStream)
+
+	<-router.Start()
+	msg := &redis.Message{Payload: string(payload[:])}
+	mockBus.Messages <- msg
+	<-router.Stop()
+
+	assert.Equal(t, true, callbacks.OnSubscribeStreamFired)
+}
+
+func TestOnSubscribeStreamCancel(t *testing.T) {
+	payload, err := mockServerMessagePayload(rpc.SubscribeStreamCancelMethod, "{}")
+	assert.Nil(t, err)
+
+	callbacks := &MockCallbacks{}
+
+	mockBus := NewMockBus()
+
+	s := NewMockSubscriber(mockBus)
+	router, err := NewRouter(s)
+	assert.Nil(t, err)
+
+	router.OnSubscribeStreamCancel(callbacks.OnSubscribeStreamCancel)
+
+	<-router.Start()
+	msg := &redis.Message{Payload: string(payload[:])}
+	mockBus.Messages <- msg
+	<-router.Stop()
+
+	assert.Equal(t, true, callbacks.OnSubscribeStreamCancelFired)
 }
 
 func mockServerMessagePayload(method rpc.Method, params string) ([]byte, error) {

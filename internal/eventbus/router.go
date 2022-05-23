@@ -27,12 +27,14 @@ type Router struct {
 	stop    chan struct{}
 	stopped chan struct{}
 
-	onAddICECandidate func(core.UserSessionID, rpc.ICECandidateParams) error
-	onOffer           func(core.UserSessionID, rpc.SDPParams) error
-	onJoin            func(core.UserSessionID) error
-	onCloseSession    func(core.UserSessionID) error
-	onPublishStream   func(core.UserSessionID) error
-	onStopStream      func(core.UserSessionID) error
+	onAddICECandidate       func(core.UserSessionID, rpc.ICECandidateParams) error
+	onOffer                 func(core.UserSessionID, rpc.SDPParams) error
+	onJoin                  func(core.UserSessionID) error
+	onCloseSession          func(core.UserSessionID) error
+	onPublishStream         func(core.UserSessionID) error
+	onStopStream            func(core.UserSessionID) error
+	onSubscribeStream       func(core.UserSessionID) error
+	onSubscribeStreamCancel func(core.UserSessionID) error
 }
 
 func NewRouter(sub Subscriber) (*Router, error) {
@@ -115,6 +117,14 @@ func (router *Router) Start() chan struct{} {
 					if err := router.onStopStream(userID); err != nil {
 						log.Error().Err(err).Str("service", "router").Msg("stop stream error")
 					}
+				case rpc.SubscribeStreamMethod:
+					if err := router.onSubscribeStream(userID); err != nil {
+						log.Error().Err(err).Str("service", "router").Msg("subscribe to stream error")
+					}
+				case rpc.SubscribeStreamCancelMethod:
+					if err := router.onSubscribeStreamCancel(userID); err != nil {
+						log.Error().Err(err).Str("service", "router").Msg("cancel subscribe to stream error")
+					}
 				default:
 					log.Error().Err(errUndefinedMethod).Str("rpcMethod", string(r.GetMethod())).Str("service", "router").Msg("")
 				}
@@ -181,4 +191,12 @@ func (router *Router) OnPublishStream(callback func(core.UserSessionID) error) {
 
 func (router *Router) OnStopStream(callback func(core.UserSessionID) error) {
 	router.onStopStream = callback
+}
+
+func (router *Router) OnSubscribeStream(callback func(core.UserSessionID) error) {
+	router.onSubscribeStream = callback
+}
+
+func (router *Router) OnSubscribeStreamCancel(callback func(core.UserSessionID) error) {
+	router.onSubscribeStreamCancel = callback
 }

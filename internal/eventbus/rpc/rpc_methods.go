@@ -114,6 +114,10 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 		return NewStopStreamRpc(), nil
 	case JoinMethod:
 		return NewJoinRpc(), nil
+	case SubscribeStreamMethod:
+		return NewSubscribeStreamRpc(), nil
+	case SubscribeStreamCancelMethod:
+		return NewSubscribeStreamCancelRpc(), nil
 	default:
 		return nil, ErrUnknownRpcType
 	}
