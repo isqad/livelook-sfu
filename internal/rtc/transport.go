@@ -7,6 +7,12 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/isqad/livelook-sfu/internal/config"
+	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
+	"github.com/pion/interceptor"
+	"github.com/pion/interceptor/pkg/cc"
+	"github.com/pion/interceptor/pkg/gcc"
+	"github.com/pion/interceptor/pkg/twcc"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -23,6 +29,9 @@ type PCTransport struct {
 	pc *webrtc.PeerConnection
 	me *webrtc.MediaEngine
 
+	// stream allocator for subscriber PC
+	streamAllocator *StreamAllocator
+
 	lock              sync.Mutex
 	pendingCandidates []webrtc.ICECandidateInit
 }
@@ -30,10 +39,15 @@ type PCTransport struct {
 type TransportParams struct {
 	EnabledCodecs []config.CodecSpec
 	Config        *config.WebRTCConfig
+	Target        rpc.SignalingTarget
 }
 
 func NewPCTransport(params TransportParams) (*PCTransport, error) {
-	pc, me, err := newPeerConnection(params)
+	var bwe cc.BandwidthEstimator
+
+	pc, me, err := newPeerConnection(params, func(estimator cc.BandwidthEstimator) {
+		bwe = estimator
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -42,6 +56,13 @@ func NewPCTransport(params TransportParams) (*PCTransport, error) {
 		pc:                pc,
 		me:                me,
 		pendingCandidates: make([]webrtc.ICECandidateInit, 0),
+	}
+
+	if params.Target == rpc.Receiver {
+		t.streamAllocator = NewStreamAllocator()
+		if bwe != nil {
+			t.streamAllocator.SetBandwidthEstimator(bwe)
+		}
 	}
 
 	t.pc.OnICEGatheringStateChange(func(state webrtc.ICEGathererState) {
@@ -53,10 +74,17 @@ func NewPCTransport(params TransportParams) (*PCTransport, error) {
 	return t, nil
 }
 
-func newPeerConnection(params TransportParams) (*webrtc.PeerConnection, *webrtc.MediaEngine, error) {
-	log.Debug().Str("service", "pcTransport").Msg("create new peer connection")
+func newPeerConnection(params TransportParams, onBandwidthEstimator func(estimator cc.BandwidthEstimator)) (*webrtc.PeerConnection, *webrtc.MediaEngine, error) {
+	var directionConfig config.DirectionConfig
 
-	me, err := createMediaEngine(params.EnabledCodecs, params.Config.Publisher)
+	if params.Target == rpc.Publisher {
+		directionConfig = params.Config.Publisher
+	} else {
+		directionConfig = params.Config.Subscriber
+	}
+
+	log.Debug().Str("service", "pcTransport").Msgf("create new peer connection for %s", params.Target)
+	me, err := createMediaEngine(params.EnabledCodecs, directionConfig)
 	if err != nil {
 		log.Error().Err(err).Str("service", "pcTransport").Msg("")
 		return nil, nil, err
@@ -70,9 +98,49 @@ func newPeerConnection(params TransportParams) (*webrtc.PeerConnection, *webrtc.
 	se.SetReceiveMTU(mtu)
 	se.SetICETimeouts(iceDisconnectedTimeout, iceFailedTimeout, iceKeepaliveInterval)
 
+	ir := &interceptor.Registry{}
+	if params.Target == rpc.Receiver {
+		isSendSideBWE := false
+		for _, ext := range directionConfig.RTPHeaderExtension.Video {
+			if ext == sdp.TransportCCURI {
+				isSendSideBWE = true
+				break
+			}
+		}
+		for _, ext := range directionConfig.RTPHeaderExtension.Audio {
+			if ext == sdp.TransportCCURI {
+				isSendSideBWE = true
+				break
+			}
+		}
+
+		if isSendSideBWE {
+			gf, err := cc.NewInterceptor(func() (cc.BandwidthEstimator, error) {
+				return gcc.NewSendSideBWE(
+					gcc.SendSideBWEInitialBitrate(1*1000*1000),
+					gcc.SendSideBWEPacer(gcc.NewNoOpPacer()),
+				)
+			})
+			if err == nil {
+				gf.OnNewPeerConnection(func(id string, estimator cc.BandwidthEstimator) {
+					if onBandwidthEstimator != nil {
+						onBandwidthEstimator(estimator)
+					}
+				})
+				ir.Add(gf)
+
+				tf, err := twcc.NewHeaderExtensionInterceptor()
+				if err == nil {
+					ir.Add(tf)
+				}
+			}
+		}
+	}
+
 	api := webrtc.NewAPI(
 		webrtc.WithMediaEngine(me),
 		webrtc.WithSettingEngine(se),
+		webrtc.WithInterceptorRegistry(ir),
 	)
 
 	pc, err := api.NewPeerConnection(params.Config.Configuration)

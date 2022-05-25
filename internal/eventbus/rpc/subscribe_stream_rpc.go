@@ -1,19 +1,27 @@
 package rpc
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/isqad/livelook-sfu/internal/core"
+)
+
+type SubscribeParams struct {
+	UserID core.UserSessionID `json:"user_id"`
+}
 
 type SubscribeStreamRpc struct {
 	jsonRpcHead
-	Params interface{} `json:"params"`
+	Params SubscribeParams `json:"params"`
 }
 
-func NewSubscribeStreamRpc() *SubscribeStreamRpc {
+func NewSubscribeStreamRpc(userID core.UserSessionID) *SubscribeStreamRpc {
 	return &SubscribeStreamRpc{
 		jsonRpcHead: jsonRpcHead{
 			Version: jsonRpcVersion,
 			Method:  SubscribeStreamMethod,
 		},
-		Params: nil,
+		Params: SubscribeParams{userID},
 	}
 }
 

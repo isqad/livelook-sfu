@@ -115,9 +115,19 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 	case JoinMethod:
 		return NewJoinRpc(), nil
 	case SubscribeStreamMethod:
-		return NewSubscribeStreamRpc(), nil
+		subParams := &SubscribeParams{}
+		if err := json.Unmarshal(params, subParams); err != nil {
+			return nil, err
+		}
+
+		return NewSubscribeStreamRpc(subParams.UserID), nil
 	case SubscribeStreamCancelMethod:
-		return NewSubscribeStreamCancelRpc(), nil
+		subParams := &SubscribeParams{}
+		if err := json.Unmarshal(params, subParams); err != nil {
+			return nil, err
+		}
+
+		return NewSubscribeStreamCancelRpc(subParams.UserID), nil
 	default:
 		return nil, ErrUnknownRpcType
 	}

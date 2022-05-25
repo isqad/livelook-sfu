@@ -54,13 +54,13 @@ func (m *MockCallbacks) OnStopStream(userID core.UserSessionID) error {
 	return nil
 }
 
-func (m *MockCallbacks) OnSubscribeStream(userID core.UserSessionID) error {
+func (m *MockCallbacks) OnSubscribeStream(userID core.UserSessionID, streamUserID core.UserSessionID) error {
 	m.OnSubscribeStreamFired = true
 
 	return nil
 }
 
-func (m *MockCallbacks) OnSubscribeStreamCancel(userID core.UserSessionID) error {
+func (m *MockCallbacks) OnSubscribeStreamCancel(userID core.UserSessionID, streamUserID core.UserSessionID) error {
 	m.OnSubscribeStreamCancelFired = true
 
 	return nil

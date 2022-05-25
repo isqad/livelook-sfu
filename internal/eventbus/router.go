@@ -12,10 +12,12 @@ import (
 )
 
 var (
-	errConvertIceCandidate = errors.New("can't convert to ice candidate")
-	errConvertOffer        = errors.New("can't convert to offer")
-	errConvertJoin         = errors.New("can't convert to join")
-	errUndefinedMethod     = errors.New("undefined method")
+	errConvertIceCandidate   = errors.New("can't convert to ice candidate")
+	errConvertOffer          = errors.New("can't convert to offer")
+	errConvertJoin           = errors.New("can't convert to join")
+	errConvertSubscribeRPC   = errors.New("can't convert to subscribe rpc")
+	errConvertUnsubscribeRPC = errors.New("can't convert to unsubscribe rpc")
+	errUndefinedMethod       = errors.New("undefined method")
 )
 
 // Router - Внутренний маршрутиризатор RPC-вызовов
@@ -33,8 +35,8 @@ type Router struct {
 	onCloseSession          func(core.UserSessionID) error
 	onPublishStream         func(core.UserSessionID) error
 	onStopStream            func(core.UserSessionID) error
-	onSubscribeStream       func(core.UserSessionID) error
-	onSubscribeStreamCancel func(core.UserSessionID) error
+	onSubscribeStream       func(userID core.UserSessionID, streamUserID core.UserSessionID) error
+	onSubscribeStreamCancel func(userID core.UserSessionID, streamUserID core.UserSessionID) error
 }
 
 func NewRouter(sub Subscriber) (*Router, error) {
@@ -118,11 +120,23 @@ func (router *Router) Start() chan struct{} {
 						log.Error().Err(err).Str("service", "router").Msg("stop stream error")
 					}
 				case rpc.SubscribeStreamMethod:
-					if err := router.onSubscribeStream(userID); err != nil {
+					msg, ok := r.(*rpc.SubscribeStreamRpc)
+					if !ok {
+						log.Error().Err(errConvertSubscribeRPC).Str("service", "router").Msg("")
+						continue
+					}
+
+					if err := router.onSubscribeStream(userID, msg.Params.UserID); err != nil {
 						log.Error().Err(err).Str("service", "router").Msg("subscribe to stream error")
 					}
 				case rpc.SubscribeStreamCancelMethod:
-					if err := router.onSubscribeStreamCancel(userID); err != nil {
+					msg, ok := r.(*rpc.SubscribeStreamCancelRpc)
+					if !ok {
+						log.Error().Err(errConvertUnsubscribeRPC).Str("service", "router").Msg("")
+						continue
+					}
+
+					if err := router.onSubscribeStreamCancel(userID, msg.Params.UserID); err != nil {
 						log.Error().Err(err).Str("service", "router").Msg("cancel subscribe to stream error")
 					}
 				default:
@@ -193,10 +207,10 @@ func (router *Router) OnStopStream(callback func(core.UserSessionID) error) {
 	router.onStopStream = callback
 }
 
-func (router *Router) OnSubscribeStream(callback func(core.UserSessionID) error) {
+func (router *Router) OnSubscribeStream(callback func(userID core.UserSessionID, streamUserID core.UserSessionID) error) {
 	router.onSubscribeStream = callback
 }
 
-func (router *Router) OnSubscribeStreamCancel(callback func(core.UserSessionID) error) {
+func (router *Router) OnSubscribeStreamCancel(callback func(userID core.UserSessionID, streamUserID core.UserSessionID) error) {
 	router.onSubscribeStreamCancel = callback
 }

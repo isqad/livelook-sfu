@@ -1,19 +1,23 @@
 package rpc
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/isqad/livelook-sfu/internal/core"
+)
 
 type SubscribeStreamCancelRpc struct {
 	jsonRpcHead
-	Params interface{} `json:"params"`
+	Params SubscribeParams `json:"params"`
 }
 
-func NewSubscribeStreamCancelRpc() *SubscribeStreamCancelRpc {
+func NewSubscribeStreamCancelRpc(userID core.UserSessionID) *SubscribeStreamCancelRpc {
 	return &SubscribeStreamCancelRpc{
 		jsonRpcHead: jsonRpcHead{
 			Version: jsonRpcVersion,
 			Method:  SubscribeStreamCancelMethod,
 		},
-		Params: nil,
+		Params: SubscribeParams{userID},
 	}
 }
 

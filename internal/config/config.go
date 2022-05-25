@@ -5,7 +5,12 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
+type CongestionControlProbeMode string
+
 const (
+	CongestionControlProbeModePadding CongestionControlProbeMode = "padding"
+	CongestionControlProbeModeMedia   CongestionControlProbeMode = "media"
+
 	frameMarking = "urn:ietf:params:rtp-hdrext:framemarking"
 )
 
@@ -23,6 +28,7 @@ type RTCConfig struct {
 	ICEPortRangeStart uint32
 	ICEPortRangeEnd   uint32
 	Interfaces        InterfacesConfig
+	CongestionControl CongestionControlConfig
 }
 
 type CodecSpec struct {
@@ -60,6 +66,14 @@ type PeerConfig struct {
 	EnabledCodecs []CodecSpec
 }
 
+type CongestionControlConfig struct {
+	Enabled            bool
+	AllowPause         bool
+	UseSendSideBWE     bool
+	ProbeMode          CongestionControlProbeMode
+	MinChannelCapacity int64
+}
+
 func NewConfig() *Config {
 	// TODO: extract to yaml
 	conf := &Config{
@@ -67,7 +81,12 @@ func NewConfig() *Config {
 			ICEPortRangeStart: 50000,
 			ICEPortRangeEnd:   60000,
 			Interfaces: InterfacesConfig{
-				Includes: []string{"enp3s0"},
+				Includes: []string{"wlp0s20u9", "enp3s0"},
+			},
+			CongestionControl: CongestionControlConfig{
+				Enabled:    true,
+				AllowPause: false,
+				ProbeMode:  CongestionControlProbeModePadding,
 			},
 		},
 		Peer: PeerConfig{
@@ -149,6 +168,29 @@ func NewWebRTCConfig(config *Config) (*WebRTCConfig, error) {
 				{Type: webrtc.TypeRTCPFBNACK, Parameter: "pli"},
 			},
 		},
+	}
+
+	if rtcConf.CongestionControl.UseSendSideBWE {
+		subscriberConfig.RTPHeaderExtension.Video = append(
+			subscriberConfig.RTPHeaderExtension.Video,
+			sdp.TransportCCURI,
+		)
+		subscriberConfig.RTCPFeedback.Video = append(
+			subscriberConfig.RTCPFeedback.Video,
+			webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC},
+		)
+	} else {
+		// By default set this RTP extensions
+		// See the https://webrtc.googlesource.com/src/+/main/docs/native-code/rtp-hdrext/index.md
+		subscriberConfig.RTPHeaderExtension.Video = append(
+			subscriberConfig.RTPHeaderExtension.Video,
+			sdp.ABSSendTimeURI,
+		)
+
+		subscriberConfig.RTCPFeedback.Video = append(
+			subscriberConfig.RTCPFeedback.Video,
+			webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB},
+		)
 	}
 
 	// Filter interfaces

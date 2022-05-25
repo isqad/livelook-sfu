@@ -57,6 +57,8 @@ func NewSessionsManager(
 	router.OnCloseSession(s.CloseSession)
 	router.OnPublishStream(s.PublishStream)
 	router.OnStopStream(s.StopStream)
+	router.OnSubscribeStream(s.Subscribe)
+	router.OnSubscribeStreamCancel(s.Unsubscribe)
 
 	return s, nil
 }
@@ -185,6 +187,18 @@ func (s *SessionsManager) StopStream(userID core.UserSessionID) error {
 		log.Error().Str("service", "sessionsManager").Str("UserID", string(userID)).Err(err).Msg("stop stream error")
 		return err
 	}
+
+	return nil
+}
+
+func (s *SessionsManager) Subscribe(userID core.UserSessionID, streamerUserID core.UserSessionID) error {
+	log.Debug().Str("service", "sessionsManager").Str("UserID", string(userID)).Str("StreamerID", string(streamerUserID)).Msg("creating a subscription to the streaming")
+
+	return nil
+}
+
+func (s *SessionsManager) Unsubscribe(userID core.UserSessionID, streamerUserID core.UserSessionID) error {
+	log.Debug().Str("service", "sessionsManager").Str("UserID", string(userID)).Str("StreamerID", string(streamerUserID)).Msg("cancel subscription to the streaming")
 
 	return nil
 }
