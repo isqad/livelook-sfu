@@ -198,20 +198,24 @@ func (app *App) Router() http.Handler {
 		// TODO:
 		// - пагинация
 		r.Get("/dialogs", func(w http.ResponseWriter, r *http.Request) {
-
+			w.WriteHeader(http.StatusNotImplemented)
 		})
 		// API для получения сообщений диалога
 		// GET /api/v1/dialogs/:id
 		// TODO: пагинация
 		r.Get("/dialogs/{id}", func(w http.ResponseWriter, r *http.Request) {
-
+			w.WriteHeader(http.StatusNotImplemented)
 		})
 		// API для создания диалога
 		// POST /api/v1/dialogs
-		r.Post("/dialogs", func(w http.ResponseWriter, r *http.Request) {})
+		r.Post("/dialogs", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotImplemented)
+		})
 		// API для отправки сообщения
 		// POST /api/v1/dialogs/{id}/messages
-		r.Post("/dialogs/{id}/messages", func(w http.ResponseWriter, r *http.Request) {})
+		r.Post("/dialogs/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotImplemented)
+		})
 
 		// API для получения информации о пользователе
 		// GET /api/v1/current_user
