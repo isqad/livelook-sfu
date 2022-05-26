@@ -11,3 +11,6 @@ web/static/js/node_modules/
 web/static/js/dist/
 configs/certs/*
 configs/config.production.yml
+*.ivf
+*.webm
+*.ogg
