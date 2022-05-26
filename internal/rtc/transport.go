@@ -172,7 +172,9 @@ func (t *PCTransport) SetRemoteDescription(sdp webrtc.SessionDescription) error 
 	defer t.lock.Unlock()
 
 	for _, candidate := range t.pendingCandidates {
-		t.pc.AddICECandidate(candidate)
+		if err := t.pc.AddICECandidate(candidate); err != nil {
+			return err
+		}
 	}
 
 	t.pendingCandidates = make([]webrtc.ICECandidateInit, 0)
