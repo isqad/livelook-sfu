@@ -1,6 +1,9 @@
 package rtc
 
 import (
+	"strings"
+	"time"
+
 	"github.com/rs/zerolog/log"
 
 	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
@@ -9,6 +12,7 @@ import (
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/livelook-sfu/internal/telemetry"
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -181,6 +185,34 @@ func (p *Participant) onDataChannel(dc *webrtc.DataChannel) {
 // when a new remoteTrack is created, creates a Track and adds it to room
 func (p *Participant) onMediaTrack(track *webrtc.TrackRemote, rtpReceiver *webrtc.RTPReceiver) {
 	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Msg("on media track")
+	// Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
+	go func() {
+		ticker := time.NewTicker(time.Second * 3)
+		for range ticker.C {
+			errSend := p.publisher.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())}})
+			if errSend != nil {
+				log.Error().Err(errSend).Str("service", "participant").Str("ID", string(p.ID)).Msg("")
+				return
+			}
+		}
+	}()
+
+	codec := track.Codec()
+
+	if strings.EqualFold(codec.MimeType, webrtc.MimeTypeVP8) {
+		log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Msg("vp8 codec")
+
+		for {
+			rtpPacket, _, err := track.ReadRTP()
+			if err != nil {
+				log.Error().Err(err).Str("service", "participant").Str("ID", string(p.ID)).Msg("")
+				return
+			}
+
+			log.Debug().Interface("packet_header", rtpPacket.Header).Msg("")
+		}
+	}
+
 	// if p.State() == livekit.ParticipantInfo_DISCONNECTED {
 	// 	return
 	// }
