@@ -89,9 +89,15 @@ func RpcFromReader(reader io.Reader) (Rpc, error) {
 		if sdpParams.SDP != "" {
 			gzdata, err := base64.StdEncoding.DecodeString(sdpParams.SDP)
 			if err != nil {
+				if _, ok := err.(base64.CorruptInputError); ok {
+					// Return as is
+					return NewSDPOfferRpc(&sdpParams.SessionDescription, sdpParams.Target), nil
+				}
+
 				return nil, err
 			}
 
+			// Else try to unpack it
 			zr, err := gzip.NewReader(bytes.NewReader(gzdata))
 			if err != nil {
 				return nil, err
