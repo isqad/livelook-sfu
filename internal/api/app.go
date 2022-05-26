@@ -84,6 +84,7 @@ func (app *App) Router() http.Handler {
 
 		tmpl.ExecuteTemplate(w, "layout.html", nil)
 	})
+
 	app.router.Post("/admin/login", func(w http.ResponseWriter, r *http.Request) {
 		email := r.FormValue("email")
 		password := r.FormValue("password")
@@ -110,7 +111,7 @@ func (app *App) Router() http.Handler {
 		}
 
 		session, _ := app.cookieStore.Get(r, core.AdminSessionNameKey)
-		session.Values["id"] = user.ID
+		session.Values["id"] = string(user.ID)
 		if err := session.Save(r, w); err != nil {
 			log.Error().Err(err).Str("service", "web").Msg("")
 			w.WriteHeader(http.StatusUnauthorized)
