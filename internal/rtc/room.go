@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/isqad/livelook-sfu/internal/buffer"
 	"github.com/isqad/livelook-sfu/internal/config"
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
@@ -15,11 +16,12 @@ var (
 )
 
 type Room struct {
-	ID           core.UserSessionID
-	cfg          config.PeerConfig
-	rtcCfg       *config.WebRTCConfig
-	lock         sync.RWMutex
-	participants map[core.UserSessionID]*Participant
+	ID            core.UserSessionID
+	cfg           config.PeerConfig
+	rtcCfg        config.WebRTCConfig
+	lock          sync.RWMutex
+	bufferFactory *buffer.Factory
+	participants  map[core.UserSessionID]*Participant
 
 	rpcSink eventbus.Publisher
 }
@@ -27,16 +29,21 @@ type Room struct {
 func NewRoom(
 	userID core.UserSessionID,
 	peerConfig config.PeerConfig,
-	rtcConfig *config.WebRTCConfig,
+	rtcConfig config.WebRTCConfig,
 	rpcSink eventbus.Publisher,
 ) *Room {
 	return &Room{
-		ID:           userID,
-		cfg:          peerConfig,
-		rtcCfg:       rtcConfig,
-		participants: make(map[core.UserSessionID]*Participant),
-		rpcSink:      rpcSink,
+		ID:            userID,
+		cfg:           peerConfig,
+		rtcCfg:        rtcConfig,
+		bufferFactory: buffer.NewBufferFactory(rtcConfig.Receiver.PacketBufferSize),
+		participants:  make(map[core.UserSessionID]*Participant),
+		rpcSink:       rpcSink,
 	}
+}
+
+func (r *Room) GetBufferFactory() *buffer.Factory {
+	return r.bufferFactory
 }
 
 func (r *Room) Join(participant *Participant) {

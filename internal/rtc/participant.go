@@ -1,8 +1,7 @@
 package rtc
 
 import (
-	"strings"
-	"time"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/livelook-sfu/internal/telemetry"
-	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -26,7 +24,12 @@ type Participant struct {
 	subscriber *PCTransport
 	reliableDC *webrtc.DataChannel
 
+	lock            sync.Mutex
+	publishedTracks map[MediaTrackID]*MediaTrack
+
 	sink eventbus.Publisher
+
+	rtcConf *config.WebRTCConfig
 }
 
 func NewParticipant(
@@ -38,8 +41,10 @@ func NewParticipant(
 	var err error
 
 	p := &Participant{
-		ID:   userID,
-		sink: sink,
+		ID:              userID,
+		sink:            sink,
+		rtcConf:         rtcConf,
+		publishedTracks: make(map[MediaTrackID]*MediaTrack),
 	}
 
 	p.publisher, err = NewPCTransport(TransportParams{
@@ -182,58 +187,18 @@ func (p *Participant) onDataChannel(dc *webrtc.DataChannel) {
 	}
 }
 
-// when a new remoteTrack is created, creates a Track and adds it to room
 func (p *Participant) onMediaTrack(track *webrtc.TrackRemote, rtpReceiver *webrtc.RTPReceiver) {
 	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Msg("on media track")
-	// Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
-	go func() {
-		ticker := time.NewTicker(time.Second * 3)
-		for range ticker.C {
-			errSend := p.publisher.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())}})
-			if errSend != nil {
-				log.Error().Err(errSend).Str("service", "participant").Str("ID", string(p.ID)).Msg("")
-				return
-			}
-		}
-	}()
 
-	codec := track.Codec()
+	mt := NewMediaTrack(MediaTrackParams{
+		BufferFactory: p.rtcConf.BufferFactory,
+	})
 
-	if strings.EqualFold(codec.MimeType, webrtc.MimeTypeVP8) {
-		log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Msg("vp8 codec")
+	p.lock.Lock()
+	p.publishedTracks[MediaTrackID(track.ID())] = mt
+	p.lock.Unlock()
 
-		for {
-			rtpPacket, _, err := track.ReadRTP()
-			if err != nil {
-				log.Error().Err(err).Str("service", "participant").Str("ID", string(p.ID)).Msg("")
-				return
-			}
-
-			log.Debug().Interface("packet_header", rtpPacket.Header).Msg("")
-		}
-	}
-
-	// if p.State() == livekit.ParticipantInfo_DISCONNECTED {
-	// 	return
-	// }
-
-	// if !p.CanPublish() {
-	// 	p.params.Logger.Warnw("no permission to publish mediaTrack", nil)
-	// 	return
-	// }
-
-	// publishedTrack, isNewTrack := p.mediaTrackReceived(track, rtpReceiver)
-
-	// if publishedTrack != nil {
-	// 	p.params.Logger.Infow("mediaTrack published",
-	// 		"kind", track.Kind().String(),
-	// 		"trackID", publishedTrack.ID(),
-	// 		"rid", track.RID(),
-	// 		"SSRC", track.SSRC())
-	// }
-	// if !isNewTrack && publishedTrack != nil && p.IsReady() && p.onTrackUpdated != nil {
-	// 	p.onTrackUpdated(p, publishedTrack)
-	// }
+	mt.AddReceiver(track, rtpReceiver)
 }
 
 // closes signal connection to notify client to resume/reconnect
@@ -242,10 +207,21 @@ func (p *Participant) closeSignalConnection() {
 }
 
 func (p *Participant) Close() {
+	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Msg("close participant")
+
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	for _, t := range p.publishedTracks {
+		t.Close()
+		delete(p.publishedTracks, t.ID)
+	}
+
+	p.publishedTracks = make(map[MediaTrackID]*MediaTrack)
 	// Close peer connections without blocking participant close. If peer connections are gathering candidates
 	// Close will block.
 	go func() {
 		p.publisher.Close()
-		// p.subscriber.Close()
+		p.subscriber.Close()
 	}()
 }

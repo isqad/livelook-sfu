@@ -79,7 +79,10 @@ func (s *SessionsManager) StartSession(userID core.UserSessionID) error {
 		return err
 	}
 
-	participant, err := rtc.NewParticipant(userID, s.rpcSink, s.cfg.Peer.EnabledCodecs, s.rtcConfig)
+	// RTC-конфиг копируется для каждого participant'а, соотв. у каждого свой buffer factory
+	rtcConf := *s.rtcConfig
+	rtcConf.SetBufferFactory(room.GetBufferFactory())
+	participant, err := rtc.NewParticipant(userID, s.rpcSink, s.cfg.Peer.EnabledCodecs, &rtcConf)
 	if err != nil {
 		return err
 	}
@@ -217,7 +220,7 @@ func (s *SessionsManager) findOrInitRoom(userID core.UserSessionID) (*rtc.Room, 
 		return room, nil
 	}
 
-	room = rtc.NewRoom(userID, s.cfg.Peer, s.rtcConfig, s.rpcSink)
+	room = rtc.NewRoom(userID, s.cfg.Peer, *s.rtcConfig, s.rpcSink)
 
 	s.lock.Lock()
 	s.sessions[userID] = room
