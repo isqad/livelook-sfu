@@ -2,6 +2,7 @@ package rtc
 
 import (
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/livelook-sfu/internal/telemetry"
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -188,13 +190,30 @@ func (p *Participant) onDataChannel(dc *webrtc.DataChannel) {
 func (p *Participant) onMediaTrack(track *webrtc.TrackRemote, rtpReceiver *webrtc.RTPReceiver) {
 	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Msg("on media track")
 
-	mt := NewMediaTrack(MediaTrackParams{})
+	// Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
+	go func() {
+		ticker := time.NewTicker(time.Second * 2)
+		for range ticker.C {
+			if rtcpErr := p.publisher.pc.WriteRTCP(
+				[]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())}},
+			); rtcpErr != nil {
+				log.Error().Err(rtcpErr).Str("service", "participant").Str("ID", string(p.ID)).Msg("")
+			}
+		}
+	}()
+
+	id := MediaTrackID(track.ID())
+	mt, err := NewMediaTrack(id, track.Kind())
+	if err != nil {
+		log.Error().Err(err).Str("service", "participant").Str("ID", string(p.ID)).Msg("")
+		return
+	}
 
 	p.Lock()
-	p.publishedTracks[MediaTrackID(track.ID())] = mt
+	p.publishedTracks[id] = mt
 	p.Unlock()
 
-	mt.AddReceiver(track, rtpReceiver)
+	mt.ForwardRTP(track, rtpReceiver)
 }
 
 // closes signal connection to notify client to resume/reconnect
@@ -218,6 +237,6 @@ func (p *Participant) Close() {
 	// Close will block.
 	go func() {
 		p.publisher.Close()
-		p.subscriber.Close()
+		// p.subscriber.Close()
 	}()
 }

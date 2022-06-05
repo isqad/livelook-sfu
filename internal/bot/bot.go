@@ -19,7 +19,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
 	"github.com/pion/interceptor"
-	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/pion/webrtc/v3/pkg/media/ivfreader"
@@ -28,6 +27,7 @@ import (
 
 const (
 	videoFileName = "video.ivf"
+	ivfHeaderSize = 32
 )
 
 type Bot struct {
@@ -195,65 +195,14 @@ func (bot *Bot) createPeerConnection() error {
 	// Create a new RTCPeerConnection
 	mediaEngine := &webrtc.MediaEngine{}
 
-	opusCodec := webrtc.RTPCodecCapability{
-		MimeType:    webrtc.MimeTypeOpus,
-		ClockRate:   48000,
-		Channels:    1,
-		SDPFmtpLine: "minptime=10;useinbandfec=1",
-	}
-	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
-		RTPCodecCapability: opusCodec,
-		PayloadType:        111,
-	}, webrtc.RTPCodecTypeAudio); err != nil {
+	if err = mediaEngine.RegisterDefaultCodecs(); err != nil {
 		return err
-	}
-	vp8Codec := webrtc.RTPCodecCapability{
-		MimeType:  webrtc.MimeTypeVP8,
-		ClockRate: 90000,
-		RTCPFeedback: []webrtc.RTCPFeedback{
-			{Type: webrtc.TypeRTCPFBGoogREMB},
-			{Type: webrtc.TypeRTCPFBTransportCC},
-			{Type: webrtc.TypeRTCPFBCCM, Parameter: "fir"},
-			{Type: webrtc.TypeRTCPFBNACK},
-			{Type: webrtc.TypeRTCPFBNACK, Parameter: "pli"},
-		},
-	}
-	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
-		RTPCodecCapability: vp8Codec,
-		PayloadType:        96,
-	}, webrtc.RTPCodecTypeVideo); err != nil {
-		return err
-	}
-
-	audioHeaderExts := []string{
-		sdp.SDESMidURI,
-		sdp.SDESRTPStreamIDURI,
-		sdp.AudioLevelURI,
-	}
-	for _, ext := range audioHeaderExts {
-		if err := mediaEngine.RegisterHeaderExtension(
-			webrtc.RTPHeaderExtensionCapability{URI: ext},
-			webrtc.RTPCodecTypeAudio,
-		); err != nil {
-			return err
-		}
-	}
-	videoHeaderExts := []string{
-		sdp.SDESMidURI,
-		sdp.SDESRTPStreamIDURI,
-		sdp.TransportCCURI,
-		"urn:ietf:params:rtp-hdrext:framemarking",
-	}
-	for _, ext := range videoHeaderExts {
-		if err := mediaEngine.RegisterHeaderExtension(
-			webrtc.RTPHeaderExtensionCapability{URI: ext},
-			webrtc.RTPCodecTypeVideo,
-		); err != nil {
-			return err
-		}
 	}
 
 	ir := &interceptor.Registry{}
+	if err = webrtc.ConfigureTWCCHeaderExtensionSender(mediaEngine, ir); err != nil {
+		return err
+	}
 	// Use the default set of Interceptors
 	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, ir); err != nil {
 		return err
@@ -364,6 +313,8 @@ func (bot *Bot) createPeerConnection() error {
 		return ivfErr
 	}
 
+	defer file.Close()
+
 	ivf, header, ivfErr := ivfreader.NewWith(file)
 	if ivfErr != nil {
 		return ivfErr
@@ -379,19 +330,21 @@ func (bot *Bot) createPeerConnection() error {
 	// It is important to use a time.Ticker instead of time.Sleep because
 	// * avoids accumulating skew, just calling time.Sleep didn't compensate for the time spent parsing the data
 	// * works around latency issues with Sleep (see https://github.com/golang/go/issues/44343)
-	ticker := time.NewTicker(time.Millisecond * time.Duration((float32(header.TimebaseNumerator)/float32(header.TimebaseDenominator))*1000))
+	d := time.Millisecond * time.Duration((float32(header.TimebaseNumerator)/float32(header.TimebaseDenominator))*1000)
+	ticker := time.NewTicker(d)
+
 	for ; true; <-ticker.C {
 		frame, _, ivfErr := ivf.ParseNextFrame()
-		if errors.Is(ivfErr, io.EOF) {
-			fmt.Printf("All video frames parsed and sent")
-			os.Exit(0)
-		}
 
-		if ivfErr != nil {
-			return ivfErr
-		}
-
-		if ivfErr = videoTrack.WriteSample(media.Sample{Data: frame, Duration: time.Second}); ivfErr != nil {
+		switch {
+		// If we have reached the end of the file start again
+		case errors.Is(ivfErr, io.EOF):
+			ivf.ResetReader(setReaderFile(videoFileName))
+		case ivfErr == nil:
+			if ivfErr = videoTrack.WriteSample(media.Sample{Data: frame, Duration: d}); ivfErr != nil {
+				return ivfErr
+			}
+		default:
 			return ivfErr
 		}
 	}
@@ -431,4 +384,17 @@ func (bot *Bot) setRemoteDescription(sdp webrtc.SessionDescription) error {
 	bot.pendingCandidates = make([]webrtc.ICECandidateInit, 0)
 
 	return nil
+}
+
+func setReaderFile(filename string) func(_ int64) io.Reader {
+	return func(_ int64) io.Reader {
+		file, err := os.Open(filename) // nolint
+		if err != nil {
+			panic(err)
+		}
+		if _, err = file.Seek(ivfHeaderSize, io.SeekStart); err != nil {
+			panic(err)
+		}
+		return file
+	}
 }

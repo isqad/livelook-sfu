@@ -14,3 +14,7 @@ configs/config.production.yml
 *.ivf
 *.webm
 *.ogg
+*.ts
+*.m3u8
+*.mp4
+*.sdp
