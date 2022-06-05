@@ -86,7 +86,7 @@ require (
 require (
 	github.com/pion/transport v0.13.0
 	github.com/spf13/afero v1.8.2 // indirect
-	go.uber.org/atomic v1.7.0
+	go.uber.org/atomic v1.9.0
 	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
 	google.golang.org/genproto v0.0.0-20220519153652-3a47de7e79bd // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
