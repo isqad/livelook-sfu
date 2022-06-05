@@ -19,17 +19,15 @@ const (
 )
 
 type Participant struct {
-	ID         core.UserSessionID
-	publisher  *PCTransport
-	subscriber *PCTransport
-	reliableDC *webrtc.DataChannel
+	sync.Mutex
 
-	lock            sync.Mutex
+	ID              core.UserSessionID
+	publisher       *PCTransport
+	subscriber      *PCTransport
+	reliableDC      *webrtc.DataChannel
 	publishedTracks map[MediaTrackID]*MediaTrack
-
-	sink eventbus.Publisher
-
-	rtcConf *config.WebRTCConfig
+	sink            eventbus.Publisher
+	rtcConf         *config.WebRTCConfig
 }
 
 func NewParticipant(
@@ -67,20 +65,20 @@ func NewParticipant(
 	p.publisher.pc.OnDataChannel(p.onDataChannel)
 	p.publisher.pc.OnTrack(p.onMediaTrack)
 
-	p.subscriber, err = NewPCTransport(TransportParams{
-		EnabledCodecs: enabledCodecs,
-		Config:        rtcConf,
-		Target:        rpc.Receiver,
-	})
-	if err != nil {
-		return nil, err
-	}
-	p.subscriber.pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
-		if err := p.sendICECandidate(candidate, rpc.Receiver); err != nil {
-			log.Error().Err(err).Str("service", "participant").Str("ID", string(p.ID)).Msg("error on send ICE candidate to receiver")
-		}
-	})
-	p.subscriber.pc.OnConnectionStateChange(p.handleSecondaryStateChange)
+	// p.subscriber, err = NewPCTransport(TransportParams{
+	// 	EnabledCodecs: enabledCodecs,
+	// 	Config:        rtcConf,
+	// 	Target:        rpc.Receiver,
+	// })
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// p.subscriber.pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+	// 	if err := p.sendICECandidate(candidate, rpc.Receiver); err != nil {
+	// 		log.Error().Err(err).Str("service", "participant").Str("ID", string(p.ID)).Msg("error on send ICE candidate to receiver")
+	// 	}
+	// })
+	// p.subscriber.pc.OnConnectionStateChange(p.handleSecondaryStateChange)
 
 	return p, nil
 }
@@ -153,16 +151,16 @@ func (p *Participant) handlePrimaryStateChange(state webrtc.PeerConnectionState)
 	}
 }
 
-func (p *Participant) handleSecondaryStateChange(state webrtc.PeerConnectionState) {
-	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Str("state", state.String()).Msg("secondary connection state changed")
+// func (p *Participant) handleSecondaryStateChange(state webrtc.PeerConnectionState) {
+// 	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Str("state", state.String()).Msg("secondary connection state changed")
 
-	if state == webrtc.PeerConnectionStateConnected {
-		telemetry.ServiceOperationCounter.WithLabelValues("ice_connection_receiver", "success", "").Add(1)
-	} else if state == webrtc.PeerConnectionStateFailed {
-		telemetry.ServiceOperationCounter.WithLabelValues("ice_connection_receiver", "error", "state_failed").Add(1)
-		p.closeSignalConnection()
-	}
-}
+// 	if state == webrtc.PeerConnectionStateConnected {
+// 		telemetry.ServiceOperationCounter.WithLabelValues("ice_connection_receiver", "success", "").Add(1)
+// 	} else if state == webrtc.PeerConnectionStateFailed {
+// 		telemetry.ServiceOperationCounter.WithLabelValues("ice_connection_receiver", "error", "state_failed").Add(1)
+// 		p.closeSignalConnection()
+// 	}
+// }
 
 func (p *Participant) onDataChannel(dc *webrtc.DataChannel) {
 	// if p.State() == livekit.ParticipantInfo_DISCONNECTED {
@@ -190,13 +188,11 @@ func (p *Participant) onDataChannel(dc *webrtc.DataChannel) {
 func (p *Participant) onMediaTrack(track *webrtc.TrackRemote, rtpReceiver *webrtc.RTPReceiver) {
 	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Msg("on media track")
 
-	mt := NewMediaTrack(MediaTrackParams{
-		BufferFactory: p.rtcConf.BufferFactory,
-	})
+	mt := NewMediaTrack(MediaTrackParams{})
 
-	p.lock.Lock()
+	p.Lock()
 	p.publishedTracks[MediaTrackID(track.ID())] = mt
-	p.lock.Unlock()
+	p.Unlock()
 
 	mt.AddReceiver(track, rtpReceiver)
 }
@@ -209,8 +205,8 @@ func (p *Participant) closeSignalConnection() {
 func (p *Participant) Close() {
 	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Msg("close participant")
 
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.Lock()
+	defer p.Unlock()
 
 	for _, t := range p.publishedTracks {
 		t.Close()

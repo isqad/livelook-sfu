@@ -8,31 +8,27 @@ import (
 
 	"github.com/isqad/livelook-sfu/internal/config"
 	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
-	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/cc"
-	"github.com/pion/interceptor/pkg/gcc"
-	"github.com/pion/interceptor/pkg/twcc"
-	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
 
 const (
 	rtcpPLIInterval            = time.Second * 3
 	dtlsRetransmissionInterval = 100 * time.Millisecond
-	mtu                        = 1400
+	mtu                        = 1460             // Equal to UDP MTU, pion's default
 	iceDisconnectedTimeout     = 10 * time.Second // compatible for ice-lite with firefox client
 	iceFailedTimeout           = 25 * time.Second // pion's default
 	iceKeepaliveInterval       = 2 * time.Second  // pion's default
 )
 
 type PCTransport struct {
+	sync.Mutex
+
 	pc *webrtc.PeerConnection
 	me *webrtc.MediaEngine
 
 	// stream allocator for subscriber PC
-	streamAllocator *StreamAllocator
-
-	lock              sync.Mutex
+	streamAllocator   *StreamAllocator
 	pendingCandidates []webrtc.ICECandidateInit
 }
 
@@ -74,7 +70,10 @@ func NewPCTransport(params TransportParams) (*PCTransport, error) {
 	return t, nil
 }
 
-func newPeerConnection(params TransportParams, onBandwidthEstimator func(estimator cc.BandwidthEstimator)) (*webrtc.PeerConnection, *webrtc.MediaEngine, error) {
+func newPeerConnection(
+	params TransportParams,
+	onBandwidthEstimator func(estimator cc.BandwidthEstimator),
+) (*webrtc.PeerConnection, *webrtc.MediaEngine, error) {
 	var directionConfig config.DirectionConfig
 
 	if params.Target == rpc.Publisher {
@@ -84,11 +83,12 @@ func newPeerConnection(params TransportParams, onBandwidthEstimator func(estimat
 	}
 
 	log.Debug().Str("service", "pcTransport").Msgf("create new peer connection for %s", params.Target)
-	me, err := createMediaEngine(params.EnabledCodecs, directionConfig)
+	me, ir, err := createMediaEngine(params.EnabledCodecs, directionConfig, params.Target)
 	if err != nil {
 		log.Error().Err(err).Str("service", "pcTransport").Msg("")
 		return nil, nil, err
 	}
+	log.Debug().Str("service", "pcTransport").Msgf("interceptor registry: %+v", ir)
 
 	se := params.Config.SettingEngine
 	se.DisableMediaEngineCopy(true)
@@ -97,45 +97,6 @@ func newPeerConnection(params TransportParams, onBandwidthEstimator func(estimat
 	se.SetDTLSRetransmissionInterval(dtlsRetransmissionInterval)
 	se.SetReceiveMTU(mtu)
 	se.SetICETimeouts(iceDisconnectedTimeout, iceFailedTimeout, iceKeepaliveInterval)
-
-	ir := &interceptor.Registry{}
-	if params.Target == rpc.Receiver {
-		isSendSideBWE := false
-		for _, ext := range directionConfig.RTPHeaderExtension.Video {
-			if ext == sdp.TransportCCURI {
-				isSendSideBWE = true
-				break
-			}
-		}
-		for _, ext := range directionConfig.RTPHeaderExtension.Audio {
-			if ext == sdp.TransportCCURI {
-				isSendSideBWE = true
-				break
-			}
-		}
-
-		if isSendSideBWE {
-			gf, err := cc.NewInterceptor(func() (cc.BandwidthEstimator, error) {
-				return gcc.NewSendSideBWE(
-					gcc.SendSideBWEInitialBitrate(1*1000*1000),
-					gcc.SendSideBWEPacer(gcc.NewNoOpPacer()),
-				)
-			})
-			if err == nil {
-				gf.OnNewPeerConnection(func(id string, estimator cc.BandwidthEstimator) {
-					if onBandwidthEstimator != nil {
-						onBandwidthEstimator(estimator)
-					}
-				})
-				ir.Add(gf)
-
-				tf, err := twcc.NewHeaderExtensionInterceptor()
-				if err == nil {
-					ir.Add(tf)
-				}
-			}
-		}
-	}
 
 	api := webrtc.NewAPI(
 		webrtc.WithMediaEngine(me),
@@ -155,8 +116,8 @@ func (t *PCTransport) AddICECandidate(candidate webrtc.ICECandidateInit) error {
 		return nil
 	}
 
-	t.lock.Lock()
-	defer t.lock.Unlock()
+	t.Lock()
+	defer t.Unlock()
 
 	t.pendingCandidates = append(t.pendingCandidates, candidate)
 
@@ -168,8 +129,8 @@ func (t *PCTransport) SetRemoteDescription(sdp webrtc.SessionDescription) error 
 		return err
 	}
 
-	t.lock.Lock()
-	defer t.lock.Unlock()
+	t.Lock()
+	defer t.Unlock()
 
 	for _, candidate := range t.pendingCandidates {
 		if err := t.pc.AddICECandidate(candidate); err != nil {

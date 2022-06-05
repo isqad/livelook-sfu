@@ -4,32 +4,73 @@ import (
 	"strings"
 
 	"github.com/isqad/livelook-sfu/internal/config"
+	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
 )
 
-func createMediaEngine(enabledCodecs []config.CodecSpec, directionConfig config.DirectionConfig) (*webrtc.MediaEngine, error) {
+func createMediaEngine(
+	enabledCodecs []config.CodecSpec,
+	directionConfig config.DirectionConfig,
+	target rpc.SignalingTarget,
+) (*webrtc.MediaEngine, *interceptor.Registry, error) {
 	mediaEngine := &webrtc.MediaEngine{}
 	if err := registerCodecs(mediaEngine, enabledCodecs, directionConfig.RTCPFeedback); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := registerHeaderExtensions(mediaEngine, directionConfig.RTPHeaderExtension); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// Create a InterceptorRegistry. This is the user configurable RTP/RTCP Pipeline.
-	// This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
-	// this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
-	// for each PeerConnection.
-	i := &interceptor.Registry{}
-
-	// Use the default set of Interceptors
-	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, i); err != nil {
-		return nil, err
+	ir := &interceptor.Registry{}
+	if target == rpc.Publisher {
+		// Use the default set of Interceptors
+		if err := webrtc.RegisterDefaultInterceptors(mediaEngine, ir); err != nil {
+			return nil, nil, err
+		}
 	}
+	// Receiver is not implemented for now
 
-	return mediaEngine, nil
+	return mediaEngine, ir, nil
+
+	// if params.Target == rpc.Receiver {
+	// 	isSendSideBWE := false
+	// 	for _, ext := range directionConfig.RTPHeaderExtension.Video {
+	// 		if ext == sdp.TransportCCURI {
+	// 			isSendSideBWE = true
+	// 			break
+	// 		}
+	// 	}
+	// 	for _, ext := range directionConfig.RTPHeaderExtension.Audio {
+	// 		if ext == sdp.TransportCCURI {
+	// 			isSendSideBWE = true
+	// 			break
+	// 		}
+	// 	}
+
+	// 	if isSendSideBWE {
+	// 		gf, err := cc.NewInterceptor(func() (cc.BandwidthEstimator, error) {
+	// 			return gcc.NewSendSideBWE(
+	// 				gcc.SendSideBWEInitialBitrate(1*1000*1000),
+	// 				gcc.SendSideBWEPacer(gcc.NewNoOpPacer()),
+	// 			)
+	// 		})
+	// 		if err == nil {
+	// 			gf.OnNewPeerConnection(func(id string, estimator cc.BandwidthEstimator) {
+	// 				if onBandwidthEstimator != nil {
+	// 					onBandwidthEstimator(estimator)
+	// 				}
+	// 			})
+	// 			ir.Add(gf)
+
+	// 			tf, err := twcc.NewHeaderExtensionInterceptor()
+	// 			if err == nil {
+	// 				ir.Add(tf)
+	// 			}
+	// 		}
+	// 	}
+	// }
 }
 
 func registerCodecs(

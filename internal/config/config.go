@@ -1,7 +1,6 @@
 package config
 
 import (
-	"github.com/isqad/livelook-sfu/internal/buffer"
 	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
@@ -25,16 +24,11 @@ type Config struct {
 	RTC  RTCConfig
 }
 
-type ReceiverConfig struct {
-	PacketBufferSize int
-}
-
 type RTCConfig struct {
 	ICEPortRangeStart uint32
 	ICEPortRangeEnd   uint32
 	Interfaces        InterfacesConfig
 	CongestionControl CongestionControlConfig
-	PacketBufferSize  int
 }
 
 type CodecSpec struct {
@@ -47,8 +41,6 @@ type WebRTCConfig struct {
 	SettingEngine webrtc.SettingEngine
 	Publisher     DirectionConfig
 	Subscriber    DirectionConfig
-	Receiver      ReceiverConfig
-	BufferFactory *buffer.Factory
 }
 
 type RTPHeaderExtensionConfig struct {
@@ -86,7 +78,6 @@ func NewConfig() *Config {
 	// TODO: extract to yaml
 	conf := &Config{
 		RTC: RTCConfig{
-			PacketBufferSize:  500,
 			ICEPortRangeStart: 50000,
 			ICEPortRangeEnd:   60000,
 			Interfaces: InterfacesConfig{
@@ -224,13 +215,5 @@ func NewWebRTCConfig(config *Config) (*WebRTCConfig, error) {
 		SettingEngine: s,
 		Publisher:     publisherConfig,
 		Subscriber:    subscriberConfig,
-		Receiver: ReceiverConfig{
-			PacketBufferSize: rtcConf.PacketBufferSize,
-		},
 	}, nil
-}
-
-func (c *WebRTCConfig) SetBufferFactory(f *buffer.Factory) {
-	c.BufferFactory = f
-	c.SettingEngine.BufferFactory = f.GetOrNew
 }

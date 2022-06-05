@@ -79,9 +79,8 @@ func (s *SessionsManager) StartSession(userID core.UserSessionID) error {
 		return err
 	}
 
-	// RTC-конфиг копируется для каждого participant'а, соотв. у каждого свой buffer factory
+	// RTC-конфиг копируется для каждого participant'а
 	rtcConf := *s.rtcConfig
-	rtcConf.SetBufferFactory(room.GetBufferFactory())
 	participant, err := rtc.NewParticipant(userID, s.rpcSink, s.cfg.Peer.EnabledCodecs, &rtcConf)
 	if err != nil {
 		return err

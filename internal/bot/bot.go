@@ -18,6 +18,8 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
+	"github.com/pion/interceptor"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/pion/webrtc/v3/pkg/media/ivfreader"
@@ -191,7 +193,78 @@ func (bot *Bot) readRPC(conn *websocket.Conn) error {
 func (bot *Bot) createPeerConnection() error {
 	var err error
 	// Create a new RTCPeerConnection
-	bot.peerConnection, err = webrtc.NewPeerConnection(webrtc.Configuration{
+	mediaEngine := &webrtc.MediaEngine{}
+
+	opusCodec := webrtc.RTPCodecCapability{
+		MimeType:    webrtc.MimeTypeOpus,
+		ClockRate:   48000,
+		Channels:    1,
+		SDPFmtpLine: "minptime=10;useinbandfec=1",
+	}
+	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: opusCodec,
+		PayloadType:        111,
+	}, webrtc.RTPCodecTypeAudio); err != nil {
+		return err
+	}
+	vp8Codec := webrtc.RTPCodecCapability{
+		MimeType:  webrtc.MimeTypeVP8,
+		ClockRate: 90000,
+		RTCPFeedback: []webrtc.RTCPFeedback{
+			{Type: webrtc.TypeRTCPFBGoogREMB},
+			{Type: webrtc.TypeRTCPFBTransportCC},
+			{Type: webrtc.TypeRTCPFBCCM, Parameter: "fir"},
+			{Type: webrtc.TypeRTCPFBNACK},
+			{Type: webrtc.TypeRTCPFBNACK, Parameter: "pli"},
+		},
+	}
+	if err := mediaEngine.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: vp8Codec,
+		PayloadType:        96,
+	}, webrtc.RTPCodecTypeVideo); err != nil {
+		return err
+	}
+
+	audioHeaderExts := []string{
+		sdp.SDESMidURI,
+		sdp.SDESRTPStreamIDURI,
+		sdp.AudioLevelURI,
+	}
+	for _, ext := range audioHeaderExts {
+		if err := mediaEngine.RegisterHeaderExtension(
+			webrtc.RTPHeaderExtensionCapability{URI: ext},
+			webrtc.RTPCodecTypeAudio,
+		); err != nil {
+			return err
+		}
+	}
+	videoHeaderExts := []string{
+		sdp.SDESMidURI,
+		sdp.SDESRTPStreamIDURI,
+		sdp.TransportCCURI,
+		"urn:ietf:params:rtp-hdrext:framemarking",
+	}
+	for _, ext := range videoHeaderExts {
+		if err := mediaEngine.RegisterHeaderExtension(
+			webrtc.RTPHeaderExtensionCapability{URI: ext},
+			webrtc.RTPCodecTypeVideo,
+		); err != nil {
+			return err
+		}
+	}
+
+	ir := &interceptor.Registry{}
+	// Use the default set of Interceptors
+	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, ir); err != nil {
+		return err
+	}
+
+	api := webrtc.NewAPI(
+		webrtc.WithMediaEngine(mediaEngine),
+		webrtc.WithInterceptorRegistry(ir),
+	)
+
+	bot.peerConnection, err = api.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
 				URLs: []string{"stun:stun.l.google.com:19302"},
