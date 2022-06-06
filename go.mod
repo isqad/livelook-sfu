@@ -12,7 +12,7 @@ require (
 	github.com/jackc/pgx/v4 v4.16.1
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/pion/webrtc/v3 v3.1.41
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.7.2
 	google.golang.org/grpc v1.46.2
 )
 
@@ -21,6 +21,8 @@ require (
 	github.com/gammazero/deque v0.1.2
 	github.com/gorilla/websocket v1.5.0
 	github.com/pion/interceptor v0.1.11
+	github.com/pion/rtcp v1.2.9
+	github.com/pion/rtp v1.7.13
 	github.com/pion/sdp/v3 v3.0.5
 	github.com/prometheus/client_golang v1.12.2
 	github.com/rs/zerolog v1.26.1
@@ -58,8 +60,6 @@ require (
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/mdns v0.0.5 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
-	github.com/pion/rtcp v1.2.9 // indirect
-	github.com/pion/rtp v1.7.13 // indirect
 	github.com/pion/sctp v1.8.2 // indirect
 	github.com/pion/srtp/v2 v2.0.9 // indirect
 	github.com/pion/stun v0.3.5 // indirect
@@ -81,7 +81,7 @@ require (
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
