@@ -18,9 +18,11 @@ require (
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
-	github.com/gammazero/deque v0.1.2
+	github.com/gammazero/deque v0.2.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/pion/interceptor v0.1.11
+	github.com/pion/rtcp v1.2.9
+	github.com/pion/rtp v1.7.13
 	github.com/pion/sdp/v3 v3.0.5
 	github.com/prometheus/client_golang v1.12.2
 	github.com/rs/zerolog v1.26.1
@@ -58,8 +60,6 @@ require (
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/mdns v0.0.5 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
-	github.com/pion/rtcp v1.2.9 // indirect
-	github.com/pion/rtp v1.7.13 // indirect
 	github.com/pion/sctp v1.8.2 // indirect
 	github.com/pion/srtp/v2 v2.0.9 // indirect
 	github.com/pion/stun v0.3.5 // indirect
