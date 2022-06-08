@@ -28,7 +28,7 @@ require (
 	github.com/rs/zerolog v1.27.0
 	github.com/spf13/viper v1.12.0
 	github.com/urfave/cli/v2 v2.8.1
-	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2
+	golang.org/x/net v0.0.0-20220607020251-c690dde0001d
 )
 
 require (
