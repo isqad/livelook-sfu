@@ -18,7 +18,7 @@ require (
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
-	github.com/gammazero/deque v0.1.2
+	github.com/gammazero/deque v0.2.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/pion/interceptor v0.1.11
 	github.com/pion/rtcp v1.2.9
