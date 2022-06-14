@@ -19,7 +19,7 @@ type udpConn struct {
 type MediaTrackID string
 
 // TODO
-// ffmpeg -protocol_whitelist file,udp,rtp -i rtp-forwarder.sdp -c:v libx264 -preset veryfast -crf 18 -b:v 3000k -maxrate 3000k -bufsize 6000k -pix_fmt yuv420p -g 18 -flags low_delay -hls_time 2 -hls_flags 'delete_segments' -hls_playlist_type event stream.m3u8
+// ffmpeg -protocol_whitelist file,udp,rtp -i rtp-forwarder.sdp -c:v libx264 -preset veryfast -crf 18 -b:v 3000k -maxrate 3000k -bufsize 6000k -pix_fmt yuv420p -g 30 -flags low_delay -hls_time 2 -hls_flags 'delete_segments' -hls_list_size 5 stream.m3u8
 type MediaTrack struct {
 	ID          MediaTrackID
 	laddr       *net.UDPAddr
