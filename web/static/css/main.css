@@ -1,0 +1,71 @@
+.header {
+  background: url("/static/images/top-bg.png") 100% 0 no-repeat;
+  position: relative;
+}
+.video-wrap {
+  height: 647px;
+}
+.nav {
+  padding: 20px;
+}
+.logo {
+  color: blueviolet;
+}
+.qiu {
+  border-radius: 50%;
+  position: absolute;
+}
+.color-1 {
+  background: linear-gradient(135deg,#ffd75c,#ffae2f);
+}
+.color-2 {
+  background: linear-gradient(135deg,#f56d93,#9f23ff);
+}
+.color-3 {
+  background: linear-gradient(135deg,#a8e6ff,#57b7ff);
+}
+.pos-1 {
+  width: 20px;
+  height: 20px;
+  top: 40px;
+  right: 300px;
+}
+.pos-2 {
+  width: 54px;
+  height: 54px;
+  top: -20px;
+  right: 350px;
+}
+.pos-3 {
+  width: 84px;
+  height: 84px;
+  top: 650px;
+  right: 740px;
+}
+.banner {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+.banner-right {
+  color: beige;
+  padding-top: 90px;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  flex-direction: column;
+  flex-grow: 1;
+}
+.main-title {
+  font-size: 32px;
+  font-weight: 700;
+  text-shadow: 0 2px 23px rgba(98,54,255,.26);
+}
+.main-subtitle {
+  font-size: 16px;
+  line-height: 22px;
+  text-shadow: 0 2px 235px rgba(98,54,255,.26);
+  margin-top: 20px;
+  margin-bottom: 20px;
+  width: 400px;
+}
