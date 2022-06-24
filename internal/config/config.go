@@ -25,10 +25,11 @@ type Config struct {
 }
 
 type RTCConfig struct {
-	ICEPortRangeStart uint32
-	ICEPortRangeEnd   uint32
-	Interfaces        InterfacesConfig
-	CongestionControl CongestionControlConfig
+	ICEPortRangeStart   uint32
+	ICEPortRangeEnd     uint32
+	TranscoderPortStart int
+	TranscoderPortEnd   int
+	Interfaces          InterfacesConfig
 }
 
 type CodecSpec struct {
@@ -62,8 +63,11 @@ type InterfacesConfig struct {
 	Includes []string
 }
 
+type EnabledCodecs map[webrtc.RTPCodecType]CodecSpec
+
 type PeerConfig struct {
-	EnabledCodecs []CodecSpec
+	// We support only one codec per type
+	EnabledCodecs EnabledCodecs
 }
 
 type CongestionControlConfig struct {
@@ -78,21 +82,18 @@ func NewConfig() *Config {
 	// TODO: extract to yaml
 	conf := &Config{
 		RTC: RTCConfig{
-			ICEPortRangeStart: 50000,
-			ICEPortRangeEnd:   60000,
+			ICEPortRangeStart:   50000,
+			ICEPortRangeEnd:     60000,
+			TranscoderPortStart: 4000,
+			TranscoderPortEnd:   5000,
 			Interfaces: InterfacesConfig{
 				Includes: []string{"wlp0s20u9", "enp3s0"},
 			},
-			CongestionControl: CongestionControlConfig{
-				Enabled:    true,
-				AllowPause: false,
-				ProbeMode:  CongestionControlProbeModePadding,
-			},
 		},
 		Peer: PeerConfig{
-			EnabledCodecs: []CodecSpec{
-				{Mime: webrtc.MimeTypeOpus},
-				{Mime: webrtc.MimeTypeVP8},
+			EnabledCodecs: map[webrtc.RTPCodecType]CodecSpec{
+				// webrtc.RTPCodecTypeAudio: {Mime: webrtc.MimeTypeOpus}, Without audio for now
+				webrtc.RTPCodecTypeVideo: {Mime: webrtc.MimeTypeVP8},
 			},
 		},
 	}
@@ -170,28 +171,17 @@ func NewWebRTCConfig(config *Config) (*WebRTCConfig, error) {
 		},
 	}
 
-	if rtcConf.CongestionControl.UseSendSideBWE {
-		subscriberConfig.RTPHeaderExtension.Video = append(
-			subscriberConfig.RTPHeaderExtension.Video,
-			sdp.TransportCCURI,
-		)
-		subscriberConfig.RTCPFeedback.Video = append(
-			subscriberConfig.RTCPFeedback.Video,
-			webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC},
-		)
-	} else {
-		// By default set this RTP extensions
-		// See the https://webrtc.googlesource.com/src/+/main/docs/native-code/rtp-hdrext/index.md
-		subscriberConfig.RTPHeaderExtension.Video = append(
-			subscriberConfig.RTPHeaderExtension.Video,
-			sdp.ABSSendTimeURI,
-		)
+	// By default set this RTP extensions
+	// See the https://webrtc.googlesource.com/src/+/main/docs/native-code/rtp-hdrext/index.md
+	subscriberConfig.RTPHeaderExtension.Video = append(
+		subscriberConfig.RTPHeaderExtension.Video,
+		sdp.ABSSendTimeURI,
+	)
 
-		subscriberConfig.RTCPFeedback.Video = append(
-			subscriberConfig.RTCPFeedback.Video,
-			webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB},
-		)
-	}
+	subscriberConfig.RTCPFeedback.Video = append(
+		subscriberConfig.RTCPFeedback.Video,
+		webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB},
+	)
 
 	// Filter interfaces
 	if len(rtcConf.Interfaces.Includes) != 0 {

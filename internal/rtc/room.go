@@ -70,6 +70,16 @@ func (r *Room) AddICECandidate(userID core.UserSessionID, params rpc.ICECandidat
 }
 
 func (r *Room) PublishStream(userID core.UserSessionID) error {
+	r.lock.RLock()
+	participant := r.participants[userID]
+	r.lock.RUnlock()
+
+	if participant == nil {
+		return errNoParticipant
+	}
+
+	participant.StartPublish()
+
 	return nil
 }
 

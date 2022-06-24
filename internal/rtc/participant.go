@@ -1,10 +1,13 @@
 package rtc
 
 import (
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/viper"
 
 	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
 
@@ -13,6 +16,7 @@ import (
 	"github.com/isqad/livelook-sfu/internal/eventbus"
 	"github.com/isqad/livelook-sfu/internal/telemetry"
 	"github.com/pion/rtcp"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -21,7 +25,7 @@ const (
 )
 
 type Participant struct {
-	sync.Mutex
+	sync.RWMutex
 
 	ID              core.UserSessionID
 	publisher       *PCTransport
@@ -30,29 +34,42 @@ type Participant struct {
 	publishedTracks map[MediaTrackID]*MediaTrack
 	sink            eventbus.Publisher
 	rtcConf         *config.WebRTCConfig
+
+	// TODO: extract into TranscoderGateway
+	portsAllocator *PortsAllocator
+	allocatedPorts map[webrtc.PayloadType]int
+	transcoderSDP  *sdp.SessionDescription
 }
 
-func NewParticipant(
-	userID core.UserSessionID,
-	sink eventbus.Publisher,
-	enabledCodecs []config.CodecSpec,
-	rtcConf *config.WebRTCConfig,
-) (*Participant, error) {
+type ParticipantOptions struct {
+	UserID         core.UserSessionID
+	RpcSink        eventbus.Publisher
+	EnabledCodecs  config.EnabledCodecs
+	RtcConf        *config.WebRTCConfig
+	PortsAllocator *PortsAllocator
+}
+
+func NewParticipant(opts ParticipantOptions) (*Participant, error) {
 	var err error
 
 	p := &Participant{
-		ID:              userID,
-		sink:            sink,
-		rtcConf:         rtcConf,
+		ID:              opts.UserID,
+		sink:            opts.RpcSink,
+		rtcConf:         opts.RtcConf,
 		publishedTracks: make(map[MediaTrackID]*MediaTrack),
+		portsAllocator:  opts.PortsAllocator,
+		allocatedPorts:  make(map[webrtc.PayloadType]int),
 	}
 
-	p.publisher, err = NewPCTransport(TransportParams{
-		EnabledCodecs: enabledCodecs,
-		Config:        rtcConf,
+	if p.transcoderSDP, err = sdp.NewJSEPSessionDescription(false); err != nil {
+		return nil, err
+	}
+
+	if p.publisher, err = NewPCTransport(TransportParams{
+		EnabledCodecs: opts.EnabledCodecs,
+		Config:        opts.RtcConf,
 		Target:        rpc.Publisher,
-	})
-	if err != nil {
+	}); err != nil {
 		return nil, err
 	}
 
@@ -67,20 +84,52 @@ func NewParticipant(
 	p.publisher.pc.OnDataChannel(p.onDataChannel)
 	p.publisher.pc.OnTrack(p.onMediaTrack)
 
-	// p.subscriber, err = NewPCTransport(TransportParams{
-	// 	EnabledCodecs: enabledCodecs,
-	// 	Config:        rtcConf,
-	// 	Target:        rpc.Receiver,
-	// })
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// p.subscriber.pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
-	// 	if err := p.sendICECandidate(candidate, rpc.Receiver); err != nil {
-	// 		log.Error().Err(err).Str("service", "participant").Str("ID", string(p.ID)).Msg("error on send ICE candidate to receiver")
-	// 	}
-	// })
-	// p.subscriber.pc.OnConnectionStateChange(p.handleSecondaryStateChange)
+	// allocate udp ports for transcoder
+	for codecType, codecs := range enabledCodecParams {
+		for _, codecParams := range codecs {
+			udpPort, err := p.portsAllocator.Allocate()
+			if err != nil {
+				return nil, err
+			}
+
+			p.allocatedPorts[codecParams.PayloadType] = udpPort
+
+			md := sdp.NewJSEPMediaDescription(codecType.String(), []string{})
+			codecName := strings.TrimPrefix(codecParams.MimeType, "audio/")
+			codecName = strings.TrimPrefix(codecName, "video/")
+			md.WithCodec(
+				uint8(codecParams.PayloadType),
+				codecName,
+				codecParams.ClockRate,
+				codecParams.Channels,
+				codecParams.SDPFmtpLine,
+			)
+
+			md.MediaName.Port = sdp.RangedPort{Value: udpPort}
+
+			p.transcoderSDP.WithMedia(md)
+		}
+	}
+
+	sd, err := p.transcoderSDP.Marshal()
+	if err != nil {
+		return nil, err
+	}
+
+	rootDir := viper.GetString("app.streams_root_dir")
+	if err := os.MkdirAll(rootDir+"/"+string(p.ID), 0755); err != nil {
+		return nil, err
+	}
+
+	f, err := os.Create(rootDir + "/" + string(p.ID) + "/transcoder.sdp")
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	if _, err := f.Write(sd); err != nil {
+		return nil, err
+	}
 
 	return p, nil
 }
@@ -141,6 +190,14 @@ func (p *Participant) HandleOffer(params rpc.SDPParams) error {
 	return nil
 }
 
+func (p *Participant) StartPublish() error {
+	return nil
+}
+
+func (p *Participant) StopPublish() {
+
+}
+
 func (p *Participant) handlePrimaryStateChange(state webrtc.PeerConnectionState) {
 	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Str("state", state.String()).Msg("connection state changed")
 
@@ -165,30 +222,22 @@ func (p *Participant) handlePrimaryStateChange(state webrtc.PeerConnectionState)
 // }
 
 func (p *Participant) onDataChannel(dc *webrtc.DataChannel) {
-	// if p.State() == livekit.ParticipantInfo_DISCONNECTED {
-	// 	return
-	// }
-
 	switch dc.Label() {
 	case ReliableDataChannel:
 		p.reliableDC = dc
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 			// Just ignore
 		})
-	// case LossyDataChannel:
-	// 	p.lossyDC = dc
-	// 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-	// 		if p.CanPublishData() {
-	// 			p.handleDataMessage(livekit.DataPacket_LOSSY, msg.Data)
-	// 		}
-	// 	})
 	default:
 		log.Error().Str("service", "participant").Str("ID", string(p.ID)).Str("label", dc.Label()).Msg("unsupported datachannel added")
 	}
 }
 
+// Метод вызывается для каждого трека
 func (p *Participant) onMediaTrack(track *webrtc.TrackRemote, rtpReceiver *webrtc.RTPReceiver) {
-	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Msg("on media track")
+	payloadType := track.Codec().PayloadType
+
+	log.Debug().Str("service", "participant").Str("ID", string(p.ID)).Uint8("codec type", uint8(payloadType)).Msg("on media track")
 
 	// Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
 	go func() {
@@ -198,12 +247,13 @@ func (p *Participant) onMediaTrack(track *webrtc.TrackRemote, rtpReceiver *webrt
 				[]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())}},
 			); rtcpErr != nil {
 				log.Error().Err(rtcpErr).Str("service", "participant").Str("ID", string(p.ID)).Msg("")
+				return
 			}
 		}
 	}()
 
 	id := MediaTrackID(track.ID())
-	mt, err := NewMediaTrack(id, track.Kind())
+	mt, err := NewMediaTrack(id, payloadType, p.allocatedPorts[payloadType])
 	if err != nil {
 		log.Error().Err(err).Str("service", "participant").Str("ID", string(p.ID)).Msg("")
 		return
@@ -232,7 +282,12 @@ func (p *Participant) Close() {
 		delete(p.publishedTracks, t.ID)
 	}
 
-	p.publishedTracks = make(map[MediaTrackID]*MediaTrack)
+	for _, port := range p.allocatedPorts {
+		p.portsAllocator.Deallocate(port)
+	}
+
+	p.publishedTracks = nil
+	p.allocatedPorts = nil
 	// Close peer connections without blocking participant close. If peer connections are gathering candidates
 	// Close will block.
 	go func() {

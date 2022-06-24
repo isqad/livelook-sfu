@@ -13,6 +13,7 @@ app:
   hostname: localhost
   port: 3001
   upload_root: web/static/uploaded
+  streams_root_dir: web/static/streaming
   secret_key: foobar
 
 firebase_auth_service:

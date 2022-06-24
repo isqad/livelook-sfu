@@ -33,7 +33,7 @@ type PCTransport struct {
 }
 
 type TransportParams struct {
-	EnabledCodecs []config.CodecSpec
+	EnabledCodecs config.EnabledCodecs
 	Config        *config.WebRTCConfig
 	Target        rpc.SignalingTarget
 }

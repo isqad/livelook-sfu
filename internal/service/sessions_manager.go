@@ -24,8 +24,9 @@ type SessionsManager struct {
 	rtcConfig *config.WebRTCConfig
 	router    *eventbus.Router
 
-	lock     sync.RWMutex
-	sessions map[core.UserSessionID]*rtc.Room
+	lock           sync.RWMutex
+	sessions       map[core.UserSessionID]*rtc.Room
+	portsAllocator *rtc.PortsAllocator
 
 	rpcSink            eventbus.Publisher
 	sessionsRepository core.SessionsDBStorer
@@ -37,6 +38,7 @@ func NewSessionsManager(
 	sink eventbus.Publisher,
 	sessionsRepository core.SessionsDBStorer,
 ) (*SessionsManager, error) {
+
 	rtcConf, err := config.NewWebRTCConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -49,6 +51,7 @@ func NewSessionsManager(
 		rpcSink:            sink,
 		sessionsRepository: sessionsRepository,
 		sessions:           make(map[core.UserSessionID]*rtc.Room),
+		portsAllocator:     rtc.NewPortsAllocator(cfg.RTC.TranscoderPortStart, cfg.RTC.TranscoderPortEnd),
 	}
 
 	router.OnJoin(s.StartSession)
@@ -81,7 +84,14 @@ func (s *SessionsManager) StartSession(userID core.UserSessionID) error {
 
 	// RTC-конфиг копируется для каждого participant'а
 	rtcConf := *s.rtcConfig
-	participant, err := rtc.NewParticipant(userID, s.rpcSink, s.cfg.Peer.EnabledCodecs, &rtcConf)
+	options := rtc.ParticipantOptions{
+		UserID:         userID,
+		RpcSink:        s.rpcSink,
+		EnabledCodecs:  s.cfg.Peer.EnabledCodecs,
+		RtcConf:        &rtcConf,
+		PortsAllocator: s.portsAllocator,
+	}
+	participant, err := rtc.NewParticipant(options)
 	if err != nil {
 		return err
 	}

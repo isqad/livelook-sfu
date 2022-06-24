@@ -13,7 +13,7 @@ import (
 type udpConn struct {
 	conn        *net.UDPConn
 	port        int
-	payloadType uint8
+	payloadType webrtc.PayloadType
 }
 
 type MediaTrackID string
@@ -21,31 +21,24 @@ type MediaTrackID string
 // TODO
 // ffmpeg -protocol_whitelist file,udp,rtp -i rtp-forwarder.sdp -c:v libx264 -preset veryfast -crf 18 -b:v 3000k -maxrate 3000k -bufsize 6000k -pix_fmt yuv420p -g 30 -flags low_delay -hls_time 2 -hls_flags 'delete_segments' -hls_list_size 5 stream.m3u8
 type MediaTrack struct {
-	ID          MediaTrackID
-	laddr       *net.UDPAddr
-	forwardConn *udpConn
+	ID             MediaTrackID
+	laddr          *net.UDPAddr
+	transcoderConn *udpConn
 }
 
-func NewMediaTrack(trackID MediaTrackID, mime webrtc.RTPCodecType) (*MediaTrack, error) {
-	var err error
-
+func NewMediaTrack(trackID MediaTrackID, payloadType webrtc.PayloadType, transcoderPort int) (*MediaTrack, error) {
 	mt := &MediaTrack{
 		ID: trackID,
 	}
 
-	// Create a local addr
-	if mt.laddr, err = net.ResolveUDPAddr("udp", "127.0.0.1:"); err != nil {
-		return nil, err
+	mt.transcoderConn = &udpConn{
+		port:        transcoderPort,
+		payloadType: payloadType,
 	}
 
-	if mime == webrtc.RTPCodecTypeAudio {
-		mt.forwardConn = &udpConn{
-			port: 4000, payloadType: 111,
-		}
-	} else {
-		mt.forwardConn = &udpConn{
-			port: 4002, payloadType: 96,
-		}
+	var err error
+	if mt.laddr, err = net.ResolveUDPAddr("udp", "127.0.0.1:"); err != nil {
+		return nil, err
 	}
 
 	return mt, nil
@@ -59,13 +52,13 @@ func (t *MediaTrack) ForwardRTP(track *webrtc.TrackRemote, rtpReceiver *webrtc.R
 		raddr *net.UDPAddr
 	)
 
-	if raddr, err = net.ResolveUDPAddr("udp", fmt.Sprintf("127.0.0.1:%d", t.forwardConn.port)); err != nil {
+	if raddr, err = net.ResolveUDPAddr("udp", fmt.Sprintf("0.0.0.0:%d", t.transcoderConn.port)); err != nil {
 		log.Error().Err(err).Str("service", "MediaTrack").Str("ID", string(t.ID)).Msg("")
 		return
 	}
 
 	// Dial udp
-	if t.forwardConn.conn, err = net.DialUDP("udp", t.laddr, raddr); err != nil {
+	if t.transcoderConn.conn, err = net.DialUDP("udp", t.laddr, raddr); err != nil {
 		log.Error().Err(err).Str("service", "MediaTrack").Str("ID", string(t.ID)).Msg("")
 		return
 	}
@@ -86,7 +79,7 @@ func (t *MediaTrack) ForwardRTP(track *webrtc.TrackRemote, rtpReceiver *webrtc.R
 			log.Error().Err(err).Str("service", "MediaTrack").Str("ID", string(t.ID)).Msg("read track")
 			return
 		}
-		rtpPacket.PayloadType = t.forwardConn.payloadType
+		rtpPacket.PayloadType = uint8(t.transcoderConn.payloadType)
 
 		// Marshal into original buffer with updated PayloadType
 		if n, err = rtpPacket.MarshalTo(b); err != nil {
@@ -95,7 +88,7 @@ func (t *MediaTrack) ForwardRTP(track *webrtc.TrackRemote, rtpReceiver *webrtc.R
 		}
 
 		// Write
-		if _, writeErr := t.forwardConn.conn.Write(b[:n]); writeErr != nil {
+		if _, writeErr := t.transcoderConn.conn.Write(b[:n]); writeErr != nil {
 			// For this particular example, third party applications usually timeout after a short
 			// amount of time during which the user doesn't have enough time to provide the answer
 			// to the browser.
@@ -116,7 +109,7 @@ func (t *MediaTrack) ForwardRTP(track *webrtc.TrackRemote, rtpReceiver *webrtc.R
 func (t *MediaTrack) Close() {
 	log.Debug().Str("service", "participant").Str("ID", string(t.ID)).Msg("TODO: close exists MediaTrack")
 
-	if closeErr := t.forwardConn.conn.Close(); closeErr != nil {
+	if closeErr := t.transcoderConn.conn.Close(); closeErr != nil {
 		log.Error().Err(closeErr).Str("service", "MediaTrack").Str("ID", string(t.ID)).Msg("")
 	}
 }

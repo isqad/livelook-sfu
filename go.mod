@@ -18,7 +18,6 @@ require (
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
-	github.com/gammazero/deque v0.2.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/pion/interceptor v0.1.11
 	github.com/pion/rtcp v1.2.9
@@ -72,7 +71,6 @@ require (
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
@@ -87,9 +85,8 @@ require (
 )
 
 require (
-	github.com/pion/transport v0.13.0
+	github.com/pion/transport v0.13.0 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
-	go.uber.org/atomic v1.9.0
 	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
 	google.golang.org/genproto v0.0.0-20220519153652-3a47de7e79bd // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
