@@ -11,7 +11,7 @@ require (
 	github.com/isqad/melody v0.0.0-20200429135154-b03b96e6f3bf
 	github.com/jackc/pgx/v4 v4.16.1
 	github.com/jmoiron/sqlx v1.3.5
-	github.com/pion/webrtc/v3 v3.1.41
+	github.com/pion/webrtc/v3 v3.1.42
 	github.com/stretchr/testify v1.7.2
 	google.golang.org/grpc v1.46.2
 )
@@ -85,9 +85,9 @@ require (
 )
 
 require (
-	github.com/pion/transport v0.13.0 // indirect
+	github.com/pion/transport v0.13.1 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
+	golang.org/x/sys v0.0.0-20220608164250-635b8c9b7f68 // indirect
 	google.golang.org/genproto v0.0.0-20220519153652-3a47de7e79bd // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
 )
