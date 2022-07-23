@@ -1,6 +1,8 @@
 package transcode
 
 const (
-	TranscodeSubcriptionSubject  = "transcode"
-	TranscodeSubcriptionQueueHLS = "hls"
+	TranscoderStartSubj  = "start_transcoder"
+	TranscoderStopSubj  = "stop_transcoder"
+
+	TranscoderQueueHLS = "hls"
 )

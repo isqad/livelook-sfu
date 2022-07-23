@@ -2,7 +2,7 @@ version: '3'
 
 services:
   db:
-    image: postgres:14-alpine
+    image: postgres:11-alpine
     environment:
       - POSTGRES_DB=livelook
       - POSTGRES_PASSWORD=qwerty
@@ -97,9 +97,6 @@ services:
       - 4222
     ports:
       - "127.0.0.1:10222:4222"
-    networks:
-      - default
-      - backend
     command: -D --config /configs/nats-server.conf
     restart: "unless-stopped"
     logging:

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog/log"
 
 	"github.com/isqad/livelook-sfu/internal/config"
@@ -30,6 +31,7 @@ type SessionsManager struct {
 
 	rpcSink            eventbus.Publisher
 	sessionsRepository core.SessionsDBStorer
+	nc *nats.Conn
 }
 
 func NewSessionsManager(
@@ -37,6 +39,7 @@ func NewSessionsManager(
 	router *eventbus.Router,
 	sink eventbus.Publisher,
 	sessionsRepository core.SessionsDBStorer,
+	nc *nats.Conn,
 ) (*SessionsManager, error) {
 
 	rtcConf, err := config.NewWebRTCConfig(cfg)
@@ -51,7 +54,8 @@ func NewSessionsManager(
 		rpcSink:            sink,
 		sessionsRepository: sessionsRepository,
 		sessions:           make(map[core.UserSessionID]*rtc.Room),
-		portsAllocator:     rtc.NewPortsAllocator(cfg.RTC.TranscoderPortStart, cfg.RTC.TranscoderPortEnd),
+		portsAllocator:     rtc.NewPortsAllocator(cfg.RTC.Transcoder.PortStart, cfg.RTC.Transcoder.PortEnd),
+		nc: nc,
 	}
 
 	router.OnJoin(s.StartSession)
@@ -90,9 +94,11 @@ func (s *SessionsManager) StartSession(userID core.UserSessionID) error {
 		EnabledCodecs:  s.cfg.Peer.EnabledCodecs,
 		RtcConf:        &rtcConf,
 		PortsAllocator: s.portsAllocator,
+		NatsConn:       s.nc,
 	}
 	participant, err := rtc.NewParticipant(options)
 	if err != nil {
+		participant.Close()
 		return err
 	}
 
@@ -101,6 +107,7 @@ func (s *SessionsManager) StartSession(userID core.UserSessionID) error {
 	// Send Join RPC
 	msg := rpc.NewJoinRpc()
 	if err := s.rpcSink.PublishClient(userID, msg); err != nil {
+		participant.Close()
 		return err
 	}
 

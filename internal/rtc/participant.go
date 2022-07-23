@@ -1,15 +1,16 @@
 package rtc
 
 import (
-	"os"
+	"encoding/json"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
 
 	"github.com/isqad/livelook-sfu/internal/eventbus/rpc"
+	"github.com/isqad/livelook-sfu/internal/transcode"
 
 	"github.com/isqad/livelook-sfu/internal/config"
 	"github.com/isqad/livelook-sfu/internal/core"
@@ -34,6 +35,7 @@ type Participant struct {
 	publishedTracks map[MediaTrackID]*MediaTrack
 	sink            eventbus.Publisher
 	rtcConf         *config.WebRTCConfig
+	nc              *nats.Conn
 
 	// TODO: extract into TranscoderGateway
 	portsAllocator *PortsAllocator
@@ -47,6 +49,7 @@ type ParticipantOptions struct {
 	EnabledCodecs  config.EnabledCodecs
 	RtcConf        *config.WebRTCConfig
 	PortsAllocator *PortsAllocator
+	NatsConn       *nats.Conn
 }
 
 func NewParticipant(opts ParticipantOptions) (*Participant, error) {
@@ -59,6 +62,7 @@ func NewParticipant(opts ParticipantOptions) (*Participant, error) {
 		publishedTracks: make(map[MediaTrackID]*MediaTrack),
 		portsAllocator:  opts.PortsAllocator,
 		allocatedPorts:  make(map[webrtc.PayloadType]int),
+		nc:              opts.NatsConn,
 	}
 
 	if p.transcoderSDP, err = sdp.NewJSEPSessionDescription(false); err != nil {
@@ -116,18 +120,17 @@ func NewParticipant(opts ParticipantOptions) (*Participant, error) {
 		return nil, err
 	}
 
-	rootDir := viper.GetString("app.streams_root_dir")
-	if err := os.MkdirAll(rootDir+"/"+string(p.ID), 0755); err != nil {
-		return nil, err
+	message := &transcode.Message{
+		UserID: p.ID,
+		SDP: sd,
 	}
 
-	f, err := os.Create(rootDir + "/" + string(p.ID) + "/transcoder.sdp")
+	payload, err := json.Marshal(message)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
 
-	if _, err := f.Write(sd); err != nil {
+	if err := p.nc.Publish(transcode.TranscoderStartSubj, payload);  err != nil {
 		return nil, err
 	}
 
@@ -290,8 +293,23 @@ func (p *Participant) Close() {
 	p.allocatedPorts = nil
 	// Close peer connections without blocking participant close. If peer connections are gathering candidates
 	// Close will block.
-	go func() {
-		p.publisher.Close()
-		// p.subscriber.Close()
-	}()
+	if p.publisher != nil {
+		go func() {
+			p.publisher.Close()
+			// p.subscriber.Close()
+		}()
+	}
+
+	message := &transcode.Message{
+		UserID: p.ID,
+	}
+
+	payload, err := json.Marshal(message)
+	if err != nil {
+		log.Error().Err(err).Msg("")
+	}
+
+	if err := p.nc.Publish(transcode.TranscoderStopSubj, payload);  err != nil {
+		log.Error().Err(err).Msg("")
+	}
 }
