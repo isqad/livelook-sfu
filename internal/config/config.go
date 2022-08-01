@@ -24,11 +24,15 @@ type Config struct {
 	RTC  RTCConfig
 }
 
+type TranscoderConfig struct {
+	PortStart int
+	PortEnd   int
+}
+
 type RTCConfig struct {
 	ICEPortRangeStart   uint32
 	ICEPortRangeEnd     uint32
-	TranscoderPortStart int
-	TranscoderPortEnd   int
+	Transcoder          TranscoderConfig
 	Interfaces          InterfacesConfig
 }
 
@@ -84,8 +88,10 @@ func NewConfig() *Config {
 		RTC: RTCConfig{
 			ICEPortRangeStart:   50000,
 			ICEPortRangeEnd:     60000,
-			TranscoderPortStart: 4000,
-			TranscoderPortEnd:   5000,
+			Transcoder: TranscoderConfig{
+				PortStart: 4000,
+				PortEnd:   5000,
+			},
 			Interfaces: InterfacesConfig{
 				Includes: []string{"wlp0s20u9", "enp3s0"},
 			},

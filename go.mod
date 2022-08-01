@@ -19,6 +19,7 @@ require (
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/gorilla/websocket v1.5.0
+	github.com/nats-io/nats.go v1.16.0
 	github.com/pion/interceptor v0.1.11
 	github.com/pion/rtcp v1.2.9
 	github.com/pion/rtp v1.7.13
@@ -85,6 +86,9 @@ require (
 )
 
 require (
+	github.com/nats-io/nats-server/v2 v2.8.4 // indirect
+	github.com/nats-io/nkeys v0.3.0 // indirect
+	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pion/transport v0.13.1 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
 	golang.org/x/sys v0.0.0-20220608164250-635b8c9b7f68 // indirect

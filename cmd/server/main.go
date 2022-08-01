@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
@@ -82,6 +83,11 @@ func main() {
 	})
 	redisPubSub := eventbus.RedisPubSub(rdb)
 
+	nc, err := nats.Connect(viper.GetString("nats.addr"), nats.NoEcho())
+	if err != nil {
+		log.Fatal().Err(err).Msg("")
+	}
+
 	apiApp := api.NewApp(
 		api.AppOptions{
 			DB:                 db,
@@ -95,8 +101,9 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
+
 	sfuConfig := config.NewConfig()
-	sessionManager, err := service.NewSessionsManager(sfuConfig, sfuRouter, redisPubSub, sessionsStorer)
+	sessionManager, err := service.NewSessionsManager(sfuConfig, sfuRouter, redisPubSub, sessionsStorer, nc)
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}

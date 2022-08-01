@@ -18,3 +18,6 @@ app:
 
 firebase_auth_service:
   addr: 127.0.0.1:50053
+
+nats:
+  addr: nats://127.0.0.1:10222
