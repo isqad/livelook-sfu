@@ -28,7 +28,7 @@ require (
 	github.com/rs/zerolog v1.27.0
 	github.com/spf13/viper v1.12.0
 	github.com/urfave/cli/v2 v2.10.3
-	golang.org/x/net v0.0.0-20220630215102-69896b714898
+	golang.org/x/net v0.0.0-20220805013720-a33c5aa5df48
 )
 
 require (
@@ -91,7 +91,7 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pion/transport v0.13.1 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
-	golang.org/x/sys v0.0.0-20220608164250-635b8c9b7f68 // indirect
+	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
 	google.golang.org/genproto v0.0.0-20220519153652-3a47de7e79bd // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
 )
