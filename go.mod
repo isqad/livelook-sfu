@@ -27,7 +27,7 @@ require (
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rs/zerolog v1.27.0
 	github.com/spf13/viper v1.12.0
-	github.com/urfave/cli/v2 v2.10.3
+	github.com/urfave/cli/v2 v2.11.1
 	golang.org/x/net v0.0.0-20220805013720-a33c5aa5df48
 )
 
