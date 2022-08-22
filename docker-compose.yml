@@ -7,11 +7,13 @@ services:
       - POSTGRES_DB=livelook
       - POSTGRES_PASSWORD=${LIVELOOK_POSTGRES_PASSWORD}
       - POSTGRES_USER=postgres
+      - POSTGRES_HOST_AUTH_METHOD=md5
     restart: "unless-stopped"
     volumes:
       - pg-data:/var/lib/postgresql/data
     expose:
       - "5432"
+    command: '-c shared_buffers=256MB -c password_encryption=MD5 -c log_min_messages=INFO -c log_min_duration_statement=0'
     logging:
       driver: "json-file"
       options:
@@ -19,11 +21,16 @@ services:
         max-file: "2"
 
   pgbouncer:
-    image: edoburu/pgbouncer
+    image: edoburu/pgbouncer:1.17.0
     environment:
-      - DATABASE_URL=postgres://postgres:${LIVELOOK_POSTGRES_PASSWORD}@db/livelook
+      - DB_USER=postgres
+      - DB_PASSWORD=${LIVELOOK_POSTGRES_PASSWORD}
+      - DB_HOST=db
+      - DB_NAME=livelook
       - POOL_MODE=session
-      - MAX_CLIENT_CONN=500
+      - MAX_CLIENT_CONN=150
+    volumes:
+      - ./configs/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
     expose:
       - "5432"
     depends_on:
