@@ -12,7 +12,6 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/isqad/livelook-sfu/internal/core"
 	"github.com/isqad/livelook-sfu/internal/eventbus"
-	"github.com/isqad/melody"
 	"github.com/jmoiron/sqlx"
 	"github.com/spf13/viper"
 )
@@ -31,7 +30,6 @@ type AppOptions struct {
 	SessionsRepository core.SessionsDBStorer
 
 	router         *chi.Mux
-	websocket      *melody.Melody
 	authMiddleware AuthHandler
 	userRepository core.UserStorer
 	cookieStore    *sessions.CookieStore
@@ -46,8 +44,6 @@ type App struct {
 // NewApp creates a new API application
 func NewApp(options AppOptions) *App {
 	options.router = chi.NewRouter()
-	options.websocket = melody.New()
-	options.websocket.Config.MaxMessageSize = 200 * 1024 // 200K
 
 	userRepo := core.NewUserRepository(options.DB)
 	cookieStore := sessions.NewCookieStore([]byte(viper.GetString("app.secret_key")))
@@ -147,7 +143,6 @@ func (app *App) Router() http.Handler {
 	app.router.Get("/api/v1/streams", StreamListHandler(app.DB))
 
 	app.router.With(app.authMiddleware).Route("/api/v1", func(r chi.Router) {
-		r.Get("/ws", WebsocketsHandler(app.EventsSubscriber, app.websocket))
 		r.Put("/stream", StreamUpdateHandler(app.SessionsRepository, app.DB))
 
 		// r.Get("/streams", StreamListHandler(app.DB))
@@ -233,13 +228,6 @@ func (app *App) Router() http.Handler {
 				return
 			}
 		})
-	})
-
-	app.websocket.HandleConnect(ConnectHandler(app.EventsPublisher))
-	app.websocket.HandleDisconnect(DisconnectHandler(app.EventsPublisher))
-	app.websocket.HandleMessage(HandleMessage(app.EventsPublisher))
-	app.websocket.HandleError(func(s *melody.Session, err error) {
-		log.Error().Err(err).Str("service", "web").Msg("error in websocket session")
 	})
 
 	return app.router
