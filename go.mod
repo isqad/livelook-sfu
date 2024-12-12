@@ -1,11 +1,13 @@
 module github.com/isqad/livelook-sfu
 
-go 1.19
+go 1.22
+
+toolchain go1.23.4
 
 require (
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/sessions v1.2.1
 	github.com/isqad/firebase-auth-service v0.0.2
 	github.com/isqad/melody v0.0.0-20200429135154-b03b96e6f3bf
@@ -13,7 +15,7 @@ require (
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/pion/webrtc/v3 v3.1.47
 	github.com/stretchr/testify v1.8.0
-	google.golang.org/grpc v1.48.0
+	google.golang.org/grpc v1.69.0
 )
 
 require (
@@ -28,18 +30,18 @@ require (
 	github.com/rs/zerolog v1.27.0
 	github.com/spf13/viper v1.12.0
 	github.com/urfave/cli/v2 v2.20.2
-	golang.org/x/net v0.0.0-20221004154528-8021a29435af
+	golang.org/x/net v0.30.0
 )
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/cespare/xxhash/v2 v2.1.2 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/golang-jwt/jwt/v4 v4.1.0 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/gorilla/securecookie v1.1.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
@@ -78,9 +80,9 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.3.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
-	golang.org/x/crypto v0.0.0-20221010152910-d6f0a8c073c2 // indirect
-	golang.org/x/text v0.3.7 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
+	golang.org/x/crypto v0.28.0 // indirect
+	golang.org/x/text v0.19.0 // indirect
+	google.golang.org/protobuf v1.35.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
@@ -91,7 +93,7 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pion/transport v0.13.1 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
-	golang.org/x/sys v0.0.0-20221010170243-090e33056c14 // indirect
+	golang.org/x/sys v0.26.0 // indirect
 	google.golang.org/genproto v0.0.0-20220519153652-3a47de7e79bd // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
 )
