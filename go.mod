@@ -12,7 +12,7 @@ require (
 	github.com/jackc/pgx/v4 v4.17.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/pion/webrtc/v3 v3.1.47
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.9.0
 	google.golang.org/grpc v1.48.0
 )
 
@@ -20,9 +20,9 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/nats-io/nats.go v1.16.0
-	github.com/pion/interceptor v0.1.12
-	github.com/pion/rtcp v1.2.10
-	github.com/pion/rtp v1.7.13
+	github.com/pion/interceptor v0.1.37
+	github.com/pion/rtcp v1.2.14
+	github.com/pion/rtp v1.8.9
 	github.com/pion/sdp/v3 v3.0.6
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rs/zerolog v1.27.0
