@@ -18,7 +18,7 @@ require (
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
-	github.com/gorilla/websocket v1.5.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/nats-io/nats.go v1.16.0
 	github.com/pion/interceptor v0.1.12
 	github.com/pion/rtcp v1.2.10
