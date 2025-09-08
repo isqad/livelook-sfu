@@ -1,6 +1,6 @@
 module github.com/isqad/livelook-sfu
 
-go 1.19
+go 1.23.0
 
 require (
 	github.com/go-chi/chi/v5 v5.0.7
@@ -12,7 +12,7 @@ require (
 	github.com/jackc/pgx/v4 v4.17.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/pion/webrtc/v3 v3.1.47
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.11.1
 	google.golang.org/grpc v1.48.0
 )
 
@@ -26,7 +26,7 @@ require (
 	github.com/pion/sdp/v3 v3.0.6
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rs/zerolog v1.27.0
-	github.com/spf13/viper v1.12.0
+	github.com/spf13/viper v1.21.0
 	github.com/urfave/cli/v2 v2.20.2
 	golang.org/x/net v0.0.0-20221004154528-8021a29435af
 )
@@ -37,7 +37,7 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/fsnotify/fsnotify v1.5.4 // indirect
+	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/golang-jwt/jwt/v4 v4.1.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/gorilla/securecookie v1.1.1 // indirect
@@ -55,7 +55,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
-	github.com/pelletier/go-toml/v2 v2.0.1 // indirect
+	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pion/datachannel v1.5.2 // indirect
 	github.com/pion/dtls/v2 v2.1.5 // indirect
 	github.com/pion/ice/v2 v2.2.11 // indirect
@@ -73,25 +73,29 @@ require (
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
-	github.com/spf13/cast v1.5.0 // indirect
+	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/subosito/gotenv v1.3.0 // indirect
+	github.com/spf13/pflag v1.0.10 // indirect
+	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	golang.org/x/crypto v0.0.0-20221010152910-d6f0a8c073c2 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/text v0.28.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
+	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/nats-io/nats-server/v2 v2.8.4 // indirect
 	github.com/nats-io/nkeys v0.3.0 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pion/transport v0.13.1 // indirect
-	github.com/spf13/afero v1.8.2 // indirect
-	golang.org/x/sys v0.0.0-20221010170243-090e33056c14 // indirect
+	github.com/sagikazarmark/locafero v0.11.0 // indirect
+	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
+	github.com/spf13/afero v1.15.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	golang.org/x/sys v0.29.0 // indirect
 	google.golang.org/genproto v0.0.0-20220519153652-3a47de7e79bd // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
 )
