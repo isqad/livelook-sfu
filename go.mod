@@ -1,6 +1,6 @@
 module github.com/isqad/livelook-sfu
 
-go 1.19
+go 1.24.0
 
 require (
 	github.com/go-chi/chi/v5 v5.0.7
@@ -12,7 +12,7 @@ require (
 	github.com/jackc/pgx/v4 v4.17.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/pion/webrtc/v3 v3.1.47
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.11.1
 	google.golang.org/grpc v1.48.0
 )
 
@@ -21,7 +21,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/nats-io/nats.go v1.16.0
 	github.com/pion/interceptor v0.1.12
-	github.com/pion/rtcp v1.2.10
+	github.com/pion/rtcp v1.2.17
 	github.com/pion/rtp v1.7.13
 	github.com/pion/sdp/v3 v3.0.6
 	github.com/prometheus/client_golang v1.13.0
